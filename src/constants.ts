@@ -1,4 +1,4 @@
-import { Course, Session, Feedback, Resource } from './types';
+import { Course, Session, Feedback, Resource, Student } from './types';
 
 export const COURSES: Course[] = [
   {
@@ -111,6 +111,7 @@ export const COURSES: Course[] = [
 export const SESSIONS: Session[] = [
   {
     id: 's1',
+    courseId: 'ochem-1',
     title: 'Organic Chemistry II',
     tutor: 'Dr. Aris Thorne',
     date: 'Monday, Oct 24',
@@ -118,10 +119,13 @@ export const SESSIONS: Session[] = [
     duration: 90,
     status: 'completed',
     type: 'both',
+    modality: 'in-person',
+    location: 'Science Building, Room 402',
     image: 'https://picsum.photos/seed/lab/400/225',
   },
   {
     id: 's2',
+    courseId: 'econ-1',
     title: 'Macroeconomics Intro',
     tutor: 'Sarah Jenkins',
     date: 'Friday, Oct 21',
@@ -129,10 +133,13 @@ export const SESSIONS: Session[] = [
     duration: 60,
     status: 'completed',
     type: 'video',
+    modality: 'online',
+    location: 'Zoom Meeting',
     image: 'https://picsum.photos/seed/econ/400/225',
   },
   {
     id: 's3',
+    courseId: 'ochem-1',
     title: 'Advanced Calculus',
     tutor: 'Dr. Aris Thorne',
     date: 'Today',
@@ -140,18 +147,35 @@ export const SESSIONS: Session[] = [
     duration: 60,
     status: 'upcoming',
     type: 'video',
+    modality: 'online',
+    location: 'Google Meet',
+  },
+  {
+    id: 's4',
+    courseId: 'math-1',
+    title: 'Foundation Math Review',
+    tutor: 'Mark Wilson',
+    date: 'Wednesday, Oct 26',
+    time: '10:00 AM',
+    duration: 120,
+    status: 'upcoming',
+    type: 'both',
+    modality: 'in-person',
+    location: 'Main Library, Study Room B',
   },
 ];
 
 export const FEEDBACK: Feedback[] = [
   {
     id: 'f1',
+    courseId: 'ochem-1',
     tutor: 'Prof. H. Miller',
     text: 'Your understanding of metabolic pathways has significantly improved. Try to focus on...',
     date: 'Oct 25',
   },
   {
     id: 'f2',
+    courseId: 'econ-1',
     tutor: 'Dr. Sarah Jenkins',
     text: 'Excellent progress on the thesis draft. The structural flow is much tighter.',
     date: 'Oct 23',
@@ -161,6 +185,7 @@ export const FEEDBACK: Feedback[] = [
 export const RESOURCES: Resource[] = [
   {
     id: 'r1',
+    courseId: 'ochem-1',
     title: 'Comprehensive Logic Gate Manual',
     type: 'pdf',
     size: '4.2 MB',
@@ -168,6 +193,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'r2',
+    courseId: 'econ-1',
     title: 'Statistical Analysis: R-Studio Basics',
     type: 'video',
     duration: '14:02',
@@ -175,9 +201,17 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'r3',
+    courseId: 'ochem-1',
     title: 'Exam Prep: Victorian Literature',
     type: 'zip',
     itemsCount: 12,
     icon: 'folder_open',
   },
+];
+
+export const STUDENTS: Student[] = [
+  { id: 'std-1', name: 'Alice Johnson', email: 'alice@student.edu', enrolledCourseIds: ['math-1', 'physics-1'], lastActivity: '2h ago' },
+  { id: 'std-2', name: 'Bob Smith', email: 'bob@student.edu', enrolledCourseIds: ['math-1'], lastActivity: '4h ago' },
+  { id: 'std-3', name: 'Charlie Brown', email: 'charlie@student.edu', enrolledCourseIds: ['ochem-1'], lastActivity: '1d ago' },
+  { id: 'std-4', name: 'Diana Prince', email: 'diana@student.edu', enrolledCourseIds: ['physics-1', 'math-1'], lastActivity: '3d ago' },
 ];
