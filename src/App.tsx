@@ -2523,7 +2523,7 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden">
+    <div className="w-full min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden">
       {/* Background Decorative Elements */}
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
@@ -2645,7 +2645,7 @@ export default function App() {
 
   return (
     <Router>
-      <div className="flex min-h-screen bg-surface selection:bg-primary/20 selection:text-primary">
+      <div className="w-full flex min-h-screen bg-surface selection:bg-primary/20 selection:text-primary">
         <AnimatePresence mode="wait">
           {!isAuthenticated ? (
             <Routes>
