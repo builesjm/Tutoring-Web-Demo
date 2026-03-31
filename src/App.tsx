@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
-=======
-import React, { useState } from 'react';
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -54,10 +50,7 @@ import {
 } from 'lucide-react';
 import { Course, Session, Feedback, Resource } from './types';
 import { DataProvider, useData } from './context/DataContext';
-<<<<<<< HEAD
 import { supabaseService } from './services/supabaseService';
-=======
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 import { 
   BarChart, 
   Bar, 
@@ -114,10 +107,7 @@ const Sidebar = ({ onLogout, role }: { onLogout: () => void, role: string }) => 
     { icon: LayoutDashboard, label: 'Tutor Dashboard', path: '/' },
     { icon: BookOpen, label: 'Manage Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
-<<<<<<< HEAD
     { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
-=======
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
     { icon: Calendar, label: 'Manage Schedule', path: '/schedule' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
   ];
@@ -179,10 +169,7 @@ const MobileNav = ({ role }: { role: string }) => {
     { icon: LayoutDashboard, label: 'Home', path: '/' },
     { icon: BookOpen, label: 'Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
-<<<<<<< HEAD
     { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
-=======
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
     { icon: Calendar, label: 'Schedule', path: '/schedule' },
     { icon: BarChart3, label: 'Analytics', path: '/analytics' },
   ];
@@ -387,16 +374,12 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
 const Dashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
-<<<<<<< HEAD
   const { courses, sessions, feedback, resources, role, students, currentUserEmail } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
   const enrolledCourses = currentStudent
     ? courses.filter(c => currentStudent.enrolledCourseIds.includes(c.id))
     : [];
-=======
-  const { courses, sessions, feedback, resources, role } = useData();
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 
   return (
     <motion.div 
@@ -428,18 +411,12 @@ const Dashboard = () => {
             </div>
             
             <div className="space-y-6">
-<<<<<<< HEAD
               {enrolledCourses.length === 0 && (
                 <p className="text-on-surface-variant text-sm py-4">No courses assigned yet. Your tutor will add courses for you.</p>
               )}
               {enrolledCourses.slice(0, 3).map((course) => {
                 const isExpanded = expandedCourseId === course.id;
                 const currentStudentId = currentStudent?.id;
-=======
-              {courses.slice(0, 3).map((course) => {
-                const isExpanded = expandedCourseId === course.id;
-                const currentStudentId = 's1'; // Hardcoded for demo (Alice)
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                 const courseSessions = sessions.filter(s => s.courseId === course.id && s.studentId === currentStudentId);
                 const courseResources = resources.filter(r => r.courseId === course.id && r.studentId === currentStudentId);
                 const courseFeedback = feedback.filter(f => f.courseId === course.id && f.studentId === currentStudentId);
@@ -460,17 +437,8 @@ const Dashboard = () => {
                           <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/30 px-2 py-0.5 rounded-md">
                             {course.level}
                           </span>
-<<<<<<< HEAD
                         </div>
                         <h5 className="text-xl font-bold text-on-surface truncate">{course.title}</h5>
-=======
-                          <span className="text-[10px] font-bold text-on-surface-variant">65% Complete</span>
-                        </div>
-                        <h5 className="text-xl font-bold text-on-surface truncate">{course.title}</h5>
-                        <div className="mt-2 h-1.5 bg-surface-container-highest rounded-full overflow-hidden w-full max-w-xs">
-                          <div className="h-full bg-primary w-[65%] rounded-full"></div>
-                        </div>
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                       </div>
                       <div className="flex items-center gap-3">
                         <button 
@@ -642,7 +610,6 @@ const Courses = () => {
   const [expandedCourseId, setExpandedCourseId] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = React.useState('');
-<<<<<<< HEAD
   const { courses, sessions, role, students, currentUserEmail } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
@@ -653,13 +620,6 @@ const Courses = () => {
   const filteredCourses = enrolledCourses.filter(course => {
     const matchesTab = activeTab === 'All' || course.level === activeTab;
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-=======
-  const { courses, sessions, role } = useData();
-  
-  const filteredCourses = courses.filter(course => {
-    const matchesTab = activeTab === 'All' || course.level === activeTab;
-    const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                           course.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesTab && matchesSearch;
   });
@@ -2193,7 +2153,6 @@ const TutorStudents = () => {
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', email: '' });
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-<<<<<<< HEAD
   const [inviteLoading, setInviteLoading] = useState(false);
 
   // Content modal state
@@ -2256,14 +2215,6 @@ const TutorStudents = () => {
     } else {
       setInviteStatus('error');
     }
-=======
-
-  const handleAddStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    addStudent({ ...newStudent, enrolledCourseIds: [], lastActivity: 'Just now' });
-    setNewStudent({ name: '', email: '' });
-    setShowAddStudent(false);
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
   };
 
   const toggleCourse = (studentId: string, courseId: string) => {
@@ -2311,7 +2262,6 @@ const TutorStudents = () => {
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative w-full max-w-md bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-2xl"
             >
-<<<<<<< HEAD
               <h3 className="text-2xl font-black text-on-surface mb-2">Invite Student</h3>
               <p className="text-sm text-on-surface-variant mb-6">We'll send them an email to set up their account.</p>
               <form onSubmit={handleAddStudent} className="space-y-6">
@@ -2319,14 +2269,6 @@ const TutorStudents = () => {
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
                   <input
                     type="text"
-=======
-              <h3 className="text-2xl font-black text-on-surface mb-6">Add New Student</h3>
-              <form onSubmit={handleAddStudent} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
-                  <input 
-                    type="text" 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                     required
                     value={newStudent.name}
                     onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
@@ -2336,13 +2278,8 @@ const TutorStudents = () => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email Address</label>
-<<<<<<< HEAD
                   <input
                     type="email"
-=======
-                  <input 
-                    type="email" 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                     required
                     value={newStudent.email}
                     onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
@@ -2350,7 +2287,6 @@ const TutorStudents = () => {
                     className="w-full px-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                   />
                 </div>
-<<<<<<< HEAD
                 {inviteStatus === 'success' && (
                   <p className="text-sm text-green-600 bg-green-50 rounded-2xl px-4 py-3 flex items-center gap-2">
                     <CheckCircle2 size={16} /> Invite sent successfully!
@@ -2363,30 +2299,18 @@ const TutorStudents = () => {
                 )}
                 <div className="flex gap-4 pt-4">
                   <button
-=======
-                <div className="flex gap-4 pt-4">
-                  <button 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                     type="button"
                     onClick={() => setShowAddStudent(false)}
                     className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all"
                   >
                     Cancel
                   </button>
-<<<<<<< HEAD
                   <button
                     type="submit"
                     disabled={inviteLoading || inviteStatus === 'success'}
                     className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
                   >
                     {inviteLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Mail size={18} /> Send Invite</>}
-=======
-                  <button 
-                    type="submit"
-                    className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all"
-                  >
-                    Add Student
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                   </button>
                 </div>
               </form>
@@ -2394,7 +2318,6 @@ const TutorStudents = () => {
           </div>
         )}
       </AnimatePresence>
-<<<<<<< HEAD
 
       {/* Content Add Modal */}
       <AnimatePresence>
@@ -2491,9 +2414,6 @@ const TutorStudents = () => {
         )}
       </AnimatePresence>
 
-=======
-      
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
       <div className="bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -2633,27 +2553,8 @@ const TutorStudents = () => {
                                           <div className="space-y-4">
                                             <div className="flex items-center justify-between">
                                               <h6 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">Videos & Notes</h6>
-<<<<<<< HEAD
                                               <button
                                                 onClick={() => setContentModal({ type: 'session', studentId: student.id, courseId: selectedCourseId })}
-=======
-                                              <button 
-                                                onClick={() => {
-                                                  const title = prompt('Session Title:');
-                                                  if(title) addSession({ 
-                                                    courseId: selectedCourseId, 
-                                                    studentId: student.id,
-                                                    title, 
-                                                    tutor: 'Dr. Aris Thorne', 
-                                                    date: 'Today', 
-                                                    time: '4:00 PM', 
-                                                    duration: 60, 
-                                                    status: 'completed', 
-                                                    type: 'video', 
-                                                    modality: 'online' 
-                                                  });
-                                                }}
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                                                 className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
                                               >
                                                 <PlusCircle size={16} />
@@ -2678,22 +2579,8 @@ const TutorStudents = () => {
                                           <div className="space-y-4">
                                             <div className="flex items-center justify-between">
                                               <h6 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">Resources</h6>
-<<<<<<< HEAD
                                               <button
                                                 onClick={() => setContentModal({ type: 'resource', studentId: student.id, courseId: selectedCourseId })}
-=======
-                                              <button 
-                                                onClick={() => {
-                                                  const title = prompt('Resource Title:');
-                                                  if(title) addResource({ 
-                                                    courseId: selectedCourseId, 
-                                                    studentId: student.id,
-                                                    title, 
-                                                    type: 'pdf', 
-                                                    icon: 'picture_as_pdf' 
-                                                  });
-                                                }}
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                                                 className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
                                               >
                                                 <PlusCircle size={16} />
@@ -2718,22 +2605,8 @@ const TutorStudents = () => {
                                           <div className="space-y-4 lg:col-span-2">
                                             <div className="flex items-center justify-between">
                                               <h6 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">Feedback</h6>
-<<<<<<< HEAD
                                               <button
                                                 onClick={() => setContentModal({ type: 'feedback', studentId: student.id, courseId: selectedCourseId })}
-=======
-                                              <button 
-                                                onClick={() => {
-                                                  const text = prompt('Feedback Text:');
-                                                  if(text) addFeedback({ 
-                                                    courseId: selectedCourseId, 
-                                                    studentId: student.id,
-                                                    tutor: 'Dr. Aris Thorne', 
-                                                    text, 
-                                                    date: 'Today' 
-                                                  });
-                                                }}
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                                                 className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
                                               >
                                                 <PlusCircle size={16} />
@@ -2775,7 +2648,6 @@ const TutorStudents = () => {
   );
 };
 
-<<<<<<< HEAD
 const TutorsList = () => {
   const { tutors, addTutor, deleteTutor } = useData();
   const [search, setSearch] = useState('');
@@ -2935,50 +2807,21 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
     } finally {
       setIsLoading(false);
     }
-=======
-const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
-  const [role, setRole] = useState<'student' | 'tutor'>('student');
-  const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
-      onLogin(role);
-      setIsLoading(false);
-    }, 1200);
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
   };
 
   return (
     <div className="w-full min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden">
-<<<<<<< HEAD
-=======
-      {/* Background Decorative Elements */}
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
       <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary/5 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-secondary/5 rounded-full blur-3xl"></div>
       </div>
 
-<<<<<<< HEAD
       <motion.div
-=======
-      <motion.div 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-md bg-surface-container-low rounded-[40px] p-8 md:p-10 border border-outline-variant/30 shadow-2xl relative z-10"
       >
-<<<<<<< HEAD
         <div className="mb-8">
-=======
-        <div className="mb-10">
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
           <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-on-primary mb-6 shadow-lg shadow-primary/20">
             <BrainCircuit size={32} />
           </div>
@@ -2986,7 +2829,6 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
           <p className="text-on-surface-variant">Elevate your academic journey</p>
         </div>
 
-<<<<<<< HEAD
         {/* Sign In / Sign Up toggle */}
         <div className="flex bg-surface-container-high p-1.5 rounded-2xl mb-6 border border-outline-variant/20">
           <button onClick={() => { setMode('signin'); setError(''); }}
@@ -3018,34 +2860,10 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
             </div>
           )}
 
-=======
-        {/* Role Toggle */}
-        <div className="flex bg-surface-container-high p-1.5 rounded-2xl mb-8 border border-outline-variant/20">
-          <button 
-            onClick={() => setRole('student')}
-            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${
-              role === 'student' ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            Student
-          </button>
-          <button 
-            onClick={() => setRole('tutor')}
-            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${
-              role === 'tutor' ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'
-            }`}
-          >
-            Tutor
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
-<<<<<<< HEAD
               <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="mateo@scholar.edu"
                 className="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
@@ -3145,21 +2963,12 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="Your full name"
-=======
-              <input 
-                type="email" 
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="mateo@scholar.edu"
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                 className="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-<<<<<<< HEAD
             <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Choose a Password</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
@@ -3172,23 +2981,6 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
                 className="w-full pl-12 pr-12 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
               <button
-=======
-            <div className="flex justify-between items-center ml-1">
-              <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Password</label>
-              <button type="button" className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">Forgot Password?</button>
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
-              <input 
-                type={showPassword ? 'text' : 'password'} 
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-12 pr-12 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-              />
-              <button 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant hover:text-on-surface transition-colors"
@@ -3198,41 +2990,21 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
             </div>
           </div>
 
-<<<<<<< HEAD
           {error && (
             <p className="text-sm text-red-500 bg-red-50 rounded-2xl px-4 py-3">{error}</p>
           )}
 
           <button
-=======
-          <button 
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
             type="submit"
             disabled={isLoading}
             className="w-full py-4 bg-primary text-on-primary rounded-2xl font-bold text-lg shadow-xl shadow-primary/20 hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-70 disabled:hover:scale-100"
           >
-<<<<<<< HEAD
             {isLoading
               ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               : <>Activate Account <ArrowRight size={20} /></>
             }
           </button>
         </form>
-=======
-            {isLoading ? (
-              <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-            ) : (
-              <>Sign In as {role.charAt(0).toUpperCase() + role.slice(1)} <ArrowRight size={20} /></>
-            )}
-          </button>
-        </form>
-
-        <div className="mt-10">
-          <p className="text-sm text-on-surface-variant">
-            New to DM - Tutoring? <button className="text-primary font-bold hover:underline">Create an account</button>
-          </p>
-        </div>
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
       </motion.div>
     </div>
   );
@@ -3242,7 +3014,6 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-<<<<<<< HEAD
   const [isInvite, setIsInvite] = useState(() => {
     const hash = window.location.hash;
     return hash.includes('type=invite') || hash.includes('type=recovery');
@@ -3282,28 +3053,15 @@ export default function App() {
 
   const handleLogout = async () => {
     await supabaseService.signOut();
-=======
-  const { role: userRole, setRole: setUserRole } = useData();
-
-  const handleLogin = (role: string) => {
-    setIsAuthenticated(true);
-    setUserRole(role);
-  };
-
-  const handleLogout = () => {
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
     setIsAuthenticated(false);
     setUserRole(null);
   };
 
-<<<<<<< HEAD
   // Show invite flow if URL has invite token
   if (isInvite) {
     return <AcceptInvite onDone={handleInviteDone} />;
   }
 
-=======
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
   return (
     <Router>
       <div className="w-full flex min-h-screen bg-surface selection:bg-primary/20 selection:text-primary">
@@ -3325,10 +3083,7 @@ export default function App() {
                         <Route path="/" element={<TutorDashboard />} />
                         <Route path="/courses" element={<TutorCourses />} />
                         <Route path="/students" element={<TutorStudents />} />
-<<<<<<< HEAD
                         <Route path="/tutors" element={<TutorsList />} />
-=======
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
                         <Route path="/schedule" element={<TutorSchedule />} />
                         <Route path="/analytics" element={<TutorAnalytics />} />
                         <Route path="/profile" element={<Profile />} />

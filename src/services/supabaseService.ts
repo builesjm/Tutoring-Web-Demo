@@ -1,57 +1,28 @@
-<<<<<<< HEAD
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { Course, Session, Feedback, Resource, Student, Tutor } from '../types';
-=======
-import { supabase } from '../lib/supabase';
-import { Course, Session, Feedback, Resource } from '../types';
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 
 export const supabaseService = {
   async getCourses(): Promise<Course[]> {
-    const { data, error } = await supabase
-      .from('courses')
-      .select('*');
-    
-    if (error) {
-      console.error('Error fetching courses:', error);
-      return [];
-    }
+    const { data, error } = await supabase.from('courses').select('*');
+    if (error) { console.error('Error fetching courses:', error); return []; }
     return data as Course[];
   },
 
   async getSessions(): Promise<Session[]> {
-    const { data, error } = await supabase
-      .from('sessions')
-      .select('*');
-    
-    if (error) {
-      console.error('Error fetching sessions:', error);
-      return [];
-    }
+    const { data, error } = await supabase.from('sessions').select('*');
+    if (error) { console.error('Error fetching sessions:', error); return []; }
     return data as Session[];
   },
 
   async getFeedback(): Promise<Feedback[]> {
-    const { data, error } = await supabase
-      .from('feedback')
-      .select('*');
-    
-    if (error) {
-      console.error('Error fetching feedback:', error);
-      return [];
-    }
+    const { data, error } = await supabase.from('feedback').select('*');
+    if (error) { console.error('Error fetching feedback:', error); return []; }
     return data as Feedback[];
   },
 
   async getResources(): Promise<Resource[]> {
-    const { data, error } = await supabase
-      .from('resources')
-      .select('*');
-    
-    if (error) {
-      console.error('Error fetching resources:', error);
-      return [];
-    }
+    const { data, error } = await supabase.from('resources').select('*');
+    if (error) { console.error('Error fetching resources:', error); return []; }
     return data as Resource[];
   },
 
@@ -68,60 +39,22 @@ export const supabaseService = {
   },
 
   async addCourse(course: Omit<Course, 'id'>): Promise<Course | null> {
-<<<<<<< HEAD
     const record = { ...course, id: crypto.randomUUID() };
-    const { data, error } = await supabase
-      .from('courses')
-      .insert([record])
-      .select()
-      .single();
-
-=======
-    const { data, error } = await supabase
-      .from('courses')
-      .insert([course])
-      .select()
-      .single();
-    
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
-    if (error) {
-      console.error('Error adding course:', error);
-      return null;
-    }
+    const { data, error } = await supabase.from('courses').insert([record]).select().single();
+    if (error) { console.error('Error adding course:', error); return null; }
     return data as Course;
   },
 
   async updateCourse(id: string, updates: Partial<Course>): Promise<Course | null> {
-    const { data, error } = await supabase
-      .from('courses')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      console.error('Error updating course:', error);
-      return null;
-    }
+    const { data, error } = await supabase.from('courses').update(updates).eq('id', id).select().single();
+    if (error) { console.error('Error updating course:', error); return null; }
     return data as Course;
   },
 
   async deleteCourse(id: string): Promise<boolean> {
-    const { error } = await supabase
-      .from('courses')
-      .delete()
-      .eq('id', id);
-<<<<<<< HEAD
-
-=======
-    
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
-    if (error) {
-      console.error('Error deleting course:', error);
-      return false;
-    }
+    const { error } = await supabase.from('courses').delete().eq('id', id);
+    if (error) { console.error('Error deleting course:', error); return false; }
     return true;
-<<<<<<< HEAD
   },
 
   // Students
@@ -143,17 +76,13 @@ export const supabaseService = {
       console.error('Service role key not configured. Cannot send invites.');
       return null;
     }
-    // Insert into students table first
     const record: Student = { id: crypto.randomUUID(), name, email, enrolledCourseIds: [], lastActivity: 'Invited' };
     const { data: studentData, error: studentError } = await supabase.from('students').insert([record]).select().single();
     if (studentError) { console.error('Error adding student:', studentError); return null; }
-
-    // Send invite email via Supabase Auth
     const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { role: 'student', name },
     });
     if (inviteError) { console.error('Error sending invite:', inviteError); }
-
     return studentData as Student;
   },
 
@@ -239,7 +168,6 @@ export const supabaseService = {
   },
 
   async signUp(email: string, password: string, name: string) {
-    // Only tutors sign up directly; students must use invite links
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) throw error;
     if (data.user) {
@@ -250,7 +178,6 @@ export const supabaseService = {
   },
 
   async setPasswordFromInvite(password: string, name: string) {
-    // Called after student clicks invite link — session is already active
     const { data, error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
     if (data.user) {
@@ -273,7 +200,4 @@ export const supabaseService = {
     if (error) return null;
     return data as { id: string; role: string; name: string; email: string };
   },
-=======
-  }
->>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 };
