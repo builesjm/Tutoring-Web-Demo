@@ -1,5 +1,10 @@
+<<<<<<< HEAD
 import { supabase, supabaseAdmin } from '../lib/supabase';
 import { Course, Session, Feedback, Resource, Student, Tutor } from '../types';
+=======
+import { supabase } from '../lib/supabase';
+import { Course, Session, Feedback, Resource } from '../types';
+>>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 
 export const supabaseService = {
   async getCourses(): Promise<Course[]> {
@@ -63,6 +68,7 @@ export const supabaseService = {
   },
 
   async addCourse(course: Omit<Course, 'id'>): Promise<Course | null> {
+<<<<<<< HEAD
     const record = { ...course, id: crypto.randomUUID() };
     const { data, error } = await supabase
       .from('courses')
@@ -70,6 +76,14 @@ export const supabaseService = {
       .select()
       .single();
 
+=======
+    const { data, error } = await supabase
+      .from('courses')
+      .insert([course])
+      .select()
+      .single();
+    
+>>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
     if (error) {
       console.error('Error adding course:', error);
       return null;
@@ -97,12 +111,17 @@ export const supabaseService = {
       .from('courses')
       .delete()
       .eq('id', id);
+<<<<<<< HEAD
 
+=======
+    
+>>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
     if (error) {
       console.error('Error deleting course:', error);
       return false;
     }
     return true;
+<<<<<<< HEAD
   },
 
   // Students
@@ -254,4 +273,7 @@ export const supabaseService = {
     if (error) return null;
     return data as { id: string; role: string; name: string; email: string };
   },
+=======
+  }
+>>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
 };

@@ -60,6 +60,7 @@ export interface Availability {
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
 }
+<<<<<<< HEAD
 
 export interface Tutor {
   id: string;
@@ -68,3 +69,5 @@ export interface Tutor {
   subjects?: string[];
   lastActivity?: string;
 }
+=======
+>>>>>>> cb3b7b0e70679f430807854dc87e1a18bffdd12b
