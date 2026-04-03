@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Home, 
@@ -7,7 +7,7 @@ import {
   Calendar, 
   User, 
   Search, 
-  Bell, 
+
   ChevronRight, 
   ChevronLeft,
   ChevronUp,
@@ -46,9 +46,18 @@ import {
   Check,
   MoreVertical,
   Trash2,
-  Edit3
+  Edit3,
+  Phone,
+  Link2,
+  DollarSign,
+  Youtube,
+  Upload,
+  ExternalLink,
+  FileIcon,
+  Image,
+  Film,
 } from 'lucide-react';
-import { Course, Session, Feedback, Resource } from './types';
+import { Course, Session, Feedback, Resource, Student, Tutor, Earning, ContentPost, ContentItem } from './types';
 import { DataProvider, useData } from './context/DataContext';
 import { supabaseService } from './services/supabaseService';
 import { 
@@ -88,8 +97,31 @@ import {
   setHours,
   setMinutes,
   startOfDay,
-  endOfDay
+  endOfDay,
+  formatDistanceToNow
 } from 'date-fns';
+
+const formatLastActivity = (lastActivity?: string): string => {
+  if (!lastActivity) return 'Never';
+  const d = new Date(lastActivity);
+  if (!isNaN(d.getTime())) {
+    return formatDistanceToNow(d, { addSuffix: true });
+  }
+  return lastActivity;
+};
+
+const toYouTubeEmbed = (url: string): string | null => {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (!match) return null;
+  return `https://www.youtube.com/embed/${match[1]}`;
+};
+
+const fileIconForType = (fileType: string) => {
+  if (fileType.startsWith('image/')) return <Image size={16} className="text-pink-500" />;
+  if (fileType.startsWith('video/')) return <Film size={16} className="text-purple-500" />;
+  if (fileType === 'application/pdf') return <FileText size={16} className="text-red-500" />;
+  return <FileIcon size={16} className="text-on-surface-variant" />;
+};
 
 // --- Components ---
 
@@ -197,34 +229,32 @@ const MobileNav = ({ role }: { role: string }) => {
   );
 };
 
-const Header = ({ title, role }: { title: string, role?: string }) => (
-  <header className="flex items-center justify-between mb-8">
-    <div>
-      <h2 className="text-3xl font-bold tracking-tight text-on-surface">{title}</h2>
-      <p className="text-on-surface-variant mt-1">
-        {role === 'tutor' ? 'Welcome back, Professor. Your students are waiting.' : 'Welcome back, Mateo. Ready to excel?'}
-      </p>
-    </div>
-    <div className="flex items-center gap-4">
-      <button className="p-2.5 rounded-full bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors relative">
-        <Bell size={22} />
-        <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-surface-container-high"></span>
-      </button>
+const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => {
+  const { currentUserEmail, role, tutors, students } = useData();
+  const currentUserName = React.useMemo(() => {
+    if (!currentUserEmail) return '';
+    if (role === 'tutor') return tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
+    return students.find((s: import('./types').Student) => s.email === currentUserEmail)?.name ?? '';
+  }, [currentUserEmail, role, tutors, students]);
+
+  return (
+    <header className="flex items-center justify-between mb-8">
+      <div>
+        <h2 className="text-3xl font-bold tracking-tight text-on-surface">{title}</h2>
+        {subtitle && <p className="text-on-surface-variant mt-1">{subtitle}</p>}
+      </div>
       <div className="flex items-center gap-3 pl-4 border-l border-outline-variant/30">
         <div className="text-right hidden sm:block">
-          <p className="text-sm font-semibold text-on-surface">Mateo Builes</p>
-          <p className="text-xs text-on-surface-variant">Premium Scholar</p>
+          <p className="text-sm font-semibold text-on-surface">{currentUserName || 'User'}</p>
+          <p className="text-xs text-on-surface-variant capitalize">{role || 'user'}</p>
         </div>
-        <img 
-          src="https://api.dicebear.com/7.x/avataaars/svg?seed=Mateo" 
-          alt="Avatar" 
-          className="w-10 h-10 rounded-full bg-primary-container border-2 border-primary/10"
-          referrerPolicy="no-referrer"
-        />
+        <div className="w-10 h-10 rounded-full bg-primary-container border-2 border-primary/10 flex items-center justify-center text-primary">
+          <User size={20} />
+        </div>
       </div>
-    </div>
-  </header>
-);
+    </header>
+  );
+};
 
 // --- Pages ---
 
@@ -374,7 +404,7 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
 const Dashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
-  const { courses, sessions, feedback, resources, role, students, currentUserEmail } = useData();
+  const { courses, students, currentUserEmail, contentPosts } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
   const enrolledCourses = currentStudent
@@ -388,7 +418,7 @@ const Dashboard = () => {
       exit={{ opacity: 0, y: -20 }}
       className="max-w-7xl mx-auto"
     >
-      <Header title="Dashboard" role={role || 'student'} />
+      <Header title="Dashboard" subtitle={currentStudent ? `Welcome back, ${currentStudent.name}! Ready to learn today?` : 'Welcome back! Ready to learn today?'} />
 
       <AnimatePresence>
         {selectedCourse && (
@@ -417,9 +447,11 @@ const Dashboard = () => {
               {enrolledCourses.slice(0, 3).map((course) => {
                 const isExpanded = expandedCourseId === course.id;
                 const currentStudentId = currentStudent?.id;
-                const courseSessions = sessions.filter(s => s.courseId === course.id && s.studentId === currentStudentId);
-                const courseResources = resources.filter(r => r.courseId === course.id && r.studentId === currentStudentId);
-                const courseFeedback = feedback.filter(f => f.courseId === course.id && f.studentId === currentStudentId);
+                const coursePosts = contentPosts.filter(cp =>
+                  cp.courseId === course.id &&
+                  cp.studentId === currentStudentId &&
+                  cp.status === 'published'
+                );
 
                 return (
                   <div 
@@ -466,75 +498,48 @@ const Dashboard = () => {
                           exit={{ height: 0, opacity: 0 }}
                           className="border-t border-outline-variant/20 bg-surface-container-low/50"
                         >
-                          <div className="p-8 space-y-6">
-                            {/* Notes & Videos Widget Row */}
-                            <div className="bg-surface-container-lowest p-6 rounded-[32px] border border-outline-variant/10 shadow-sm">
-                              <h6 className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <Play size={14} /> Notes & Videos
-                              </h6>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {courseSessions.length > 0 ? courseSessions.map(session => (
-                                  <div key={session.id} className="flex items-center gap-4 p-4 bg-surface-container-high/30 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all cursor-pointer group">
-                                    <div className="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface-variant group-hover:text-primary flex-shrink-0">
-                                      <Play size={20} fill="currentColor" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-bold text-on-surface truncate">{session.title}</p>
-                                      <p className="text-[10px] text-on-surface-variant font-medium uppercase tracking-wider">{session.date} • {session.duration}m</p>
-                                    </div>
-                                  </div>
-                                )) : (
-                                  <p className="text-sm text-on-surface-variant italic col-span-full">No sessions found for this course.</p>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Tutor Feedback Widget Row */}
-                            <div className="bg-surface-container-lowest p-6 rounded-[32px] border border-outline-variant/10 shadow-sm">
-                              <h6 className="text-xs font-black text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <MessageSquare size={14} /> Tutor Feedback
-                              </h6>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {courseFeedback.length > 0 ? courseFeedback.map(item => (
-                                  <div key={item.id} className="p-5 bg-tertiary-container/10 rounded-2xl border border-tertiary/10">
-                                    <div className="flex justify-between items-start mb-2">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
-                                          <User size={12} />
-                                        </div>
-                                        <span className="text-[10px] font-black text-tertiary uppercase tracking-wider">{item.tutor}</span>
+                          <div className="p-8 space-y-5">
+                            {coursePosts.length === 0 ? (
+                              <p className="text-sm text-on-surface-variant italic">No content published for this course yet.</p>
+                            ) : coursePosts.map(post => (
+                              <div key={post.id} className="bg-surface-container-lowest rounded-[28px] border border-outline-variant/10 shadow-sm p-6 space-y-4">
+                                <div>
+                                  <h6 className="text-base font-black text-on-surface">{post.title}</h6>
+                                  {post.description && (
+                                    <p className="text-sm text-on-surface-variant leading-relaxed mt-1">{post.description}</p>
+                                  )}
+                                </div>
+                                {post.items.map((item, i) => (
+                                  <div key={i}>
+                                    {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                                      <iframe
+                                        src={toYouTubeEmbed(item.url!)!}
+                                        className="w-full rounded-2xl border border-outline-variant/20"
+                                        height="220"
+                                        allowFullScreen
+                                      />
+                                    )}
+                                    {item.type === 'file' && (
+                                      <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                                        {fileIconForType(item.fileType ?? '')}
+                                        <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
                                       </div>
-                                      <span className="text-[10px] text-tertiary/60 font-medium">{item.date}</span>
-                                    </div>
-                                    <p className="text-xs text-tertiary/80 italic leading-relaxed">"{item.text}"</p>
+                                    )}
+                                    {item.type === 'link' && (
+                                      <a
+                                        href={item.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors"
+                                      >
+                                        <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
+                                        <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
+                                      </a>
+                                    )}
                                   </div>
-                                )) : (
-                                  <p className="text-sm text-on-surface-variant italic col-span-full">No feedback received for this course yet.</p>
-                                )}
+                                ))}
                               </div>
-                            </div>
-
-                            {/* Additional Resources Widget Row */}
-                            <div className="bg-surface-container-lowest p-6 rounded-[32px] border border-outline-variant/10 shadow-sm">
-                              <h6 className="text-xs font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                                <FileText size={14} /> Additional Resources
-                              </h6>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {courseResources.length > 0 ? courseResources.map(res => (
-                                  <div key={res.id} className="flex items-center gap-4 p-4 bg-surface-container-high/30 rounded-2xl border border-outline-variant/10 hover:border-primary/20 transition-all cursor-pointer group">
-                                    <div className="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-on-surface-variant group-hover:text-primary flex-shrink-0">
-                                      <FileText size={20} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-bold text-on-surface truncate">{res.title}</p>
-                                      <p className="text-[10px] text-on-surface-variant font-medium uppercase tracking-wider">{res.type} • {res.size || '1.2MB'}</p>
-                                    </div>
-                                  </div>
-                                )) : (
-                                  <p className="text-sm text-on-surface-variant italic col-span-full">No resources found for this course.</p>
-                                )}
-                              </div>
-                            </div>
+                            ))}
                           </div>
                         </motion.div>
                       )}
@@ -610,7 +615,7 @@ const Courses = () => {
   const [expandedCourseId, setExpandedCourseId] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = React.useState('');
-  const { courses, sessions, role, students, currentUserEmail } = useData();
+  const { courses, role, students, currentUserEmail, contentPosts } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
   const enrolledCourses = currentStudent
@@ -631,7 +636,7 @@ const Courses = () => {
       exit={{ opacity: 0, x: -20 }}
       className="max-w-7xl mx-auto"
     >
-      <Header title="Courses" role={role || 'student'} />
+      <Header title="Courses" />
 
       {/* Search & Filter & View Toggle */}
       <div className="flex flex-col lg:flex-row gap-4 mb-8">
@@ -648,17 +653,17 @@ const Courses = () => {
         
         <div className="flex items-center gap-4">
           <div className="flex bg-surface-container-low p-1.5 rounded-2xl border border-outline-variant/30 overflow-x-auto no-scrollbar">
-            {['All', 'Elementary', 'High School', 'Uni'].map((tab) => (
+            {(['All', 'Elementary', 'High School', 'Uni'] as const).map((tab) => (
               <button
                 key={tab}
-                onClick={() => setActiveTab(tab as any)}
+                onClick={() => setActiveTab(tab)}
                 className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                  activeTab === tab 
-                    ? 'bg-primary text-on-primary shadow-md' 
+                  activeTab === tab
+                    ? 'bg-primary text-on-primary shadow-md'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
               >
-                {tab}
+                {tab === 'All' ? 'All' : getLevelLabel(tab)}
               </button>
             ))}
           </div>
@@ -691,10 +696,15 @@ const Courses = () => {
           const courseTutor = sessions.find(s => s.courseId === course.id)?.tutor || 'Expert Tutor';
 
           if (viewMode === 'list') {
+            const coursePosts = contentPosts.filter(cp =>
+              cp.courseId === course.id &&
+              cp.studentId === currentStudent?.id &&
+              cp.status === 'published'
+            );
             return (
-              <motion.div 
+              <motion.div
                 layout
-                key={course.id} 
+                key={course.id}
                 onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
                 className={`group bg-surface-container-lowest rounded-3xl border transition-all duration-300 cursor-pointer overflow-hidden ${
                   isExpanded ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-outline-variant/30 hover:shadow-md hover:border-primary/20'
@@ -724,31 +734,47 @@ const Courses = () => {
 
                 <AnimatePresence>
                   {isExpanded && (
-                    <motion.div 
+                    <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       className="border-t border-outline-variant/20 bg-surface-container-low/30"
                     >
-                      <div className="p-6 flex flex-col md:flex-row gap-8">
-                        <div className="flex-1">
-                          <h4 className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Course Description</h4>
-                          <p className="text-sm text-on-surface-variant leading-relaxed">
-                            {course.description}
-                          </p>
-                        </div>
-                        <div className="w-full md:w-64 flex flex-col justify-end">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              alert(`Request sent for ${course.title}!`);
-                            }}
-                            className="w-full py-3 bg-primary text-on-primary rounded-2xl font-black text-xs shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all flex items-center justify-center gap-2"
-                          >
-                            <PlusCircle size={16} />
-                            Request Course
-                          </button>
-                        </div>
+                      <div className="p-6 space-y-4">
+                        {course.description && (
+                          <p className="text-sm text-on-surface-variant leading-relaxed">{course.description}</p>
+                        )}
+                        {coursePosts.length === 0 ? (
+                          <p className="text-sm text-on-surface-variant italic">No content published yet.</p>
+                        ) : coursePosts.map(post => (
+                          <div key={post.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 p-5 space-y-3">
+                            <div>
+                              <h6 className="text-sm font-black text-on-surface">{post.title}</h6>
+                              {post.description && <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{post.description}</p>}
+                            </div>
+                            {post.items.map((item, i) => (
+                              <div key={i}>
+                                {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                                  <iframe src={toYouTubeEmbed(item.url!)!} className="w-full rounded-xl border border-outline-variant/20" height="180" allowFullScreen />
+                                )}
+                                {item.type === 'file' && (
+                                  <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                                    {fileIconForType(item.fileType ?? '')}
+                                    <span className="text-xs font-medium text-on-surface truncate">{item.fileName}</span>
+                                  </div>
+                                )}
+                                {item.type === 'link' && (
+                                  <a href={item.url} target="_blank" rel="noopener noreferrer"
+                                    className="flex items-center gap-2 px-3 py-2.5 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors"
+                                    onClick={e => e.stopPropagation()}>
+                                    <ExternalLink size={13} className="text-tertiary flex-shrink-0" />
+                                    <span className="text-xs text-tertiary font-medium truncate">{item.label ?? item.url}</span>
+                                  </a>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ))}
                       </div>
                     </motion.div>
                   )}
@@ -757,10 +783,15 @@ const Courses = () => {
             );
           }
 
+          const coursePosts = contentPosts.filter(cp =>
+            cp.courseId === course.id &&
+            cp.studentId === currentStudent?.id &&
+            cp.status === 'published'
+          );
           return (
-            <motion.div 
+            <motion.div
               layout
-              key={course.id} 
+              key={course.id}
               onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
               className={`group bg-surface-container-lowest rounded-[32px] border transition-all duration-300 cursor-pointer flex flex-col overflow-hidden ${
                 isExpanded ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-outline-variant/30 hover:shadow-lg hover:border-primary/20'
@@ -814,26 +845,41 @@ const Courses = () => {
                     exit={{ height: 0, opacity: 0 }}
                     className="border-t border-outline-variant/20 bg-surface-container-low/30"
                   >
-                    <div className="p-6 space-y-6">
-                      <div>
-                        <h4 className="text-xs font-black text-primary uppercase tracking-widest mb-2">Course Description</h4>
-                        <p className="text-sm text-on-surface-variant leading-relaxed">
-                          {course.description}
-                        </p>
-                      </div>
-
-                      <div className="pt-4 border-t border-outline-variant/10">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert(`Request sent for ${course.title}!`);
-                          }}
-                          className="w-full py-4 bg-primary text-on-primary rounded-2xl font-black text-sm shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all flex items-center justify-center gap-2"
-                        >
-                          <PlusCircle size={18} />
-                          Request to take this course
-                        </button>
-                      </div>
+                    <div className="p-6 space-y-4">
+                      {course.description && (
+                        <p className="text-sm text-on-surface-variant leading-relaxed">{course.description}</p>
+                      )}
+                      {coursePosts.length === 0 ? (
+                        <p className="text-sm text-on-surface-variant italic">No content published yet.</p>
+                      ) : coursePosts.map(post => (
+                        <div key={post.id} className="bg-surface-container-low rounded-2xl border border-outline-variant/10 p-4 space-y-3">
+                          <div>
+                            <h6 className="text-sm font-black text-on-surface">{post.title}</h6>
+                            {post.description && <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{post.description}</p>}
+                          </div>
+                          {post.items.map((item, i) => (
+                            <div key={i}>
+                              {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                                <iframe src={toYouTubeEmbed(item.url!)!} className="w-full rounded-xl border border-outline-variant/20" height="160" allowFullScreen />
+                              )}
+                              {item.type === 'file' && (
+                                <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
+                                  {fileIconForType(item.fileType ?? '')}
+                                  <span className="text-xs font-medium text-on-surface truncate">{item.fileName}</span>
+                                </div>
+                              )}
+                              {item.type === 'link' && (
+                                <a href={item.url} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-2 px-3 py-2.5 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors"
+                                  onClick={e => e.stopPropagation()}>
+                                  <ExternalLink size={13} className="text-tertiary flex-shrink-0" />
+                                  <span className="text-xs text-tertiary font-medium truncate">{item.label ?? item.url}</span>
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
                     </div>
                   </motion.div>
                 )}
@@ -854,63 +900,91 @@ const Courses = () => {
   );
 };
 
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 const TutorAnalytics = () => {
-  const { sessions, students, courses, feedback } = useData();
+  const { sessions, students, courses, earnings, upsertEarning } = useData();
+  const [showEarningModal, setShowEarningModal] = useState(false);
+  const [earningForm, setEarningForm] = useState({
+    month: MONTH_ABBR[new Date().getMonth()],
+    year: new Date().getFullYear(),
+    amount: '',
+  });
+  const [savingEarning, setSavingEarning] = useState(false);
 
-  // Mock data for analytics
-  const weeklyHoursData = [
-    { name: 'Mon', hours: 4 },
-    { name: 'Tue', hours: 6 },
-    { name: 'Wed', hours: 5 },
-    { name: 'Thu', hours: 8 },
-    { name: 'Fri', hours: 4 },
-    { name: 'Sat', hours: 2 },
-    { name: 'Sun', hours: 0 },
-  ];
+  // Weekly hours derived from real sessions data (current week, Mon–Sun)
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const weeklyHoursData = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((name, i) => {
+    const day = addDays(weekStart, i);
+    const dateStr = format(day, 'yyyy-MM-dd');
+    const mins = sessions
+      .filter(s => s.date === dateStr)
+      .reduce((acc, s) => acc + (s.duration || 0), 0);
+    return { name, hours: Math.round((mins / 60) * 10) / 10 };
+  });
 
+  // Course popularity from real sessions
   const courseDistributionData = courses.map(c => ({
     name: c.title,
-    value: sessions.filter(s => s.courseId === c.id).length || Math.floor(Math.random() * 10) + 1
-  })).slice(0, 5);
+    value: sessions.filter(s => s.courseId === c.id).length,
+  })).filter(c => c.value > 0).slice(0, 5);
 
-  const studentProgressData = [
-    { month: 'Jan', avgScore: 65 },
-    { month: 'Feb', avgScore: 72 },
-    { month: 'Mar', avgScore: 68 },
-    { month: 'Apr', avgScore: 78 },
-    { month: 'May', avgScore: 85 },
-    { month: 'Jun', avgScore: 82 },
-  ];
+  // Sessions completed per month (last 6 months)
+  const last6Months = Array.from({ length: 6 }, (_, i) => {
+    const d = subMonths(new Date(), 5 - i);
+    return { month: MONTH_ABBR[d.getMonth()], monthNum: d.getMonth(), year: d.getFullYear() };
+  });
+  const sessionsByMonthData = last6Months.map(({ month, monthNum, year }) => {
+    const count = sessions.filter(s => {
+      const d = new Date(s.date);
+      return d.getMonth() === monthNum && d.getFullYear() === year && s.status === 'completed';
+    }).length;
+    return { month, sessions: count };
+  });
 
-  const earningsData = [
-    { month: 'Jan', amount: 1200 },
-    { month: 'Feb', amount: 1500 },
-    { month: 'Mar', amount: 1100 },
-    { month: 'Apr', amount: 1800 },
-    { month: 'May', amount: 2200 },
-    { month: 'Jun', amount: 1900 },
-  ];
+  // Monthly earnings from Supabase (last 12 months)
+  const last12Months = Array.from({ length: 12 }, (_, i) => {
+    const d = subMonths(new Date(), 11 - i);
+    return { month: MONTH_ABBR[d.getMonth()], year: d.getFullYear() };
+  });
+  const earningsChartData = last12Months.map(({ month, year }) => {
+    const entry = earnings.find(e => e.month === month && e.year === year);
+    return { month: `${month} '${String(year).slice(2)}`, amount: entry?.amount ?? 0 };
+  });
+
+  const totalHours = Math.round(sessions.reduce((acc, s) => acc + (s.duration || 0), 0) / 60);
+  const totalEarnings = earnings.reduce((acc, e) => acc + e.amount, 0);
 
   const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f59e0b'];
 
+  const handleSaveEarning = async () => {
+    const amount = parseFloat(earningForm.amount);
+    if (isNaN(amount) || amount < 0) return;
+    setSavingEarning(true);
+    await upsertEarning({ month: earningForm.month, year: earningForm.year, amount });
+    setSavingEarning(false);
+    setShowEarningModal(false);
+    setEarningForm(f => ({ ...f, amount: '' }));
+  };
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       className="max-w-7xl mx-auto pb-12"
     >
-      <Header title="Tutor Analytics" role="tutor" />
+      <Header title="Tutor Analytics" />
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {[
           { label: 'Total Sessions', value: sessions.length, icon: Video, color: 'bg-blue-500/10 text-blue-500' },
-          { label: 'Total Hours', value: '124h', icon: Clock, color: 'bg-purple-500/10 text-purple-500' },
+          { label: 'Total Hours', value: `${totalHours}h`, icon: Clock, color: 'bg-purple-500/10 text-purple-500' },
           { label: 'Active Students', value: students.length, icon: Users, color: 'bg-pink-500/10 text-pink-500' },
-          { label: 'Avg. Rating', value: '4.9', icon: Star, color: 'bg-amber-500/10 text-amber-500' },
+          { label: 'Total Earnings', value: `$${totalEarnings.toLocaleString()}`, icon: DollarSign, color: 'bg-amber-500/10 text-amber-500' },
         ].map((stat, i) => (
-          <motion.div 
+          <motion.div
             key={i}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -931,12 +1005,7 @@ const TutorAnalytics = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Weekly Hours Chart */}
         <div className="bg-surface-container-low p-8 rounded-[40px] border border-outline-variant/30 shadow-sm">
-          <div className="flex items-center justify-between mb-8">
-            <h3 className="text-xl font-black text-on-surface">Weekly Tutoring Hours</h3>
-            <div className="flex items-center gap-2 text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full">
-              <ArrowUpRight size={14} /> +12% vs last week
-            </div>
-          </div>
+          <h3 className="text-xl font-black text-on-surface mb-8">Weekly Tutoring Hours</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={weeklyHoursData}>
@@ -947,25 +1016,26 @@ const TutorAnalytics = () => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
                   dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    borderRadius: '16px', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
                     border: '1px solid #e5e7eb',
                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
                   }}
+                  formatter={(v: number) => [`${v}h`, 'Hours']}
                 />
                 <Area type="monotone" dataKey="hours" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorHours)" />
               </AreaChart>
@@ -976,59 +1046,68 @@ const TutorAnalytics = () => {
         {/* Course Distribution */}
         <div className="bg-surface-container-low p-8 rounded-[40px] border border-outline-variant/30 shadow-sm">
           <h3 className="text-xl font-black text-on-surface mb-8">Course Popularity</h3>
-          <div className="h-[300px] w-full flex items-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={courseDistributionData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={100}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {courseDistributionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend layout="vertical" align="right" verticalAlign="middle" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {courseDistributionData.length === 0 ? (
+            <div className="h-[300px] flex flex-col items-center justify-center text-on-surface-variant gap-2">
+              <BarChart3 size={40} className="opacity-30" />
+              <p className="text-sm font-semibold">No session data yet</p>
+              <p className="text-xs">Sessions linked to courses will appear here</p>
+            </div>
+          ) : (
+            <div className="h-[300px] w-full flex items-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={courseDistributionData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={100}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {courseDistributionData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend layout="vertical" align="right" verticalAlign="middle" />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Student Progress */}
+        {/* Sessions Completed per Month */}
         <div className="bg-surface-container-low p-8 rounded-[40px] border border-outline-variant/30 shadow-sm">
-          <h3 className="text-xl font-black text-on-surface mb-8">Average Student Progress</h3>
+          <h3 className="text-xl font-black text-on-surface mb-8">Sessions Completed (Last 6 Months)</h3>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={studentProgressData}>
+              <LineChart data={sessionsByMonthData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false} 
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
                   dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
-                  domain={[0, 100]}
+                  allowDecimals={false}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    borderRadius: '16px', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
                     border: '1px solid #e5e7eb'
                   }}
+                  formatter={(v: number) => [v, 'Sessions']}
                 />
-                <Line type="monotone" dataKey="avgScore" stroke="#ec4899" strokeWidth={4} dot={{ r: 6, fill: '#ec4899', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} />
+                <Line type="monotone" dataKey="sessions" stroke="#ec4899" strokeWidth={4} dot={{ r: 6, fill: '#ec4899', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -1036,58 +1115,162 @@ const TutorAnalytics = () => {
 
         {/* Monthly Earnings */}
         <div className="bg-surface-container-low p-8 rounded-[40px] border border-outline-variant/30 shadow-sm">
-          <h3 className="text-xl font-black text-on-surface mb-8">Monthly Earnings ($)</h3>
+          <div className="flex items-center justify-between mb-8">
+            <h3 className="text-xl font-black text-on-surface">Monthly Earnings ($)</h3>
+            <button
+              onClick={() => setShowEarningModal(true)}
+              className="flex items-center gap-1.5 text-xs font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 transition-colors"
+            >
+              <DollarSign size={13} /> Log Earnings
+            </button>
+          </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={earningsData}>
+              <BarChart data={earningsChartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="month" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
+                <XAxis
+                  dataKey="month"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 600 }}
                   dy={10}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }}
+                  tickFormatter={(v) => `$${v}`}
                 />
-                <Tooltip 
+                <Tooltip
                   cursor={{ fill: 'rgba(99, 102, 241, 0.05)' }}
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
-                    borderRadius: '16px', 
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    borderRadius: '16px',
                     border: '1px solid #e5e7eb'
                   }}
+                  formatter={(v: number) => [`$${v.toLocaleString()}`, 'Earnings']}
                 />
-                <Bar dataKey="amount" fill="#6366f1" radius={[8, 8, 0, 0]} barSize={40} />
+                <Bar dataKey="amount" fill="#6366f1" radius={[8, 8, 0, 0]} barSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
+
+      {/* Log Earnings Modal */}
+      <AnimatePresence>
+        {showEarningModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowEarningModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-surface-container-low rounded-[32px] p-8 w-full max-w-sm shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <h2 className="text-xl font-black text-on-surface mb-6">Log Earnings</h2>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 block">Month</label>
+                    <select
+                      value={earningForm.month}
+                      onChange={e => setEarningForm(f => ({ ...f, month: e.target.value }))}
+                      className="w-full bg-surface border border-outline-variant rounded-2xl px-4 py-2.5 text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      {MONTH_ABBR.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 block">Year</label>
+                    <select
+                      value={earningForm.year}
+                      onChange={e => setEarningForm(f => ({ ...f, year: Number(e.target.value) }))}
+                      className="w-full bg-surface border border-outline-variant rounded-2xl px-4 py-2.5 text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    >
+                      {[new Date().getFullYear() - 1, new Date().getFullYear()].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1.5 block">Amount ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={earningForm.amount}
+                    onChange={e => setEarningForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full bg-surface border border-outline-variant rounded-2xl px-4 py-2.5 text-sm font-semibold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowEarningModal(false)}
+                  className="flex-1 py-2.5 rounded-2xl border border-outline-variant text-sm font-bold text-on-surface-variant hover:bg-surface-container transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEarning}
+                  disabled={savingEarning || !earningForm.amount}
+                  className="flex-1 py-2.5 rounded-2xl bg-primary text-on-primary text-sm font-bold disabled:opacity-50 transition-colors"
+                >
+                  {savingEarning ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
 
 const TutorSchedule = () => {
-  const { sessions, students, courses, availability, setAvailability, addSession, role } = useData();
+  const { sessions, students, courses, availability, setAvailability, addSession, updateSession, deleteSession, tutors, currentUserEmail } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [view, setView] = useState<'month' | 'week'>('week');
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<{ date: Date, time: string } | null>(null);
-  const [bookingData, setBookingData] = useState({ studentId: '', courseId: '', title: '', duration: 60 });
+  const [scheduleView, setScheduleView] = useState<'mine' | 'team'>('mine');
+  const [calendarMode, setCalendarMode] = useState<'book' | 'unavailable'>('book');
+
+  // Booking/edit modal
+  const [sessionModal, setSessionModal] = useState<'new' | 'edit' | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<{ date: Date; time: string } | null>(null);
+  const [editingSession, setEditingSession] = useState<Session | null>(null);
+  const [bookingData, setBookingData] = useState({
+    studentId: '',
+    courseId: '',
+    tutorName: '',
+    title: '',
+    description: '',
+    duration: 60,
+    modality: 'online' as 'online' | 'in-person',
+    location: '',
+    date: '',
+    time: '',
+  });
+
+  const currentTutorName = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
 
   const weekStart = startOfWeek(currentDate);
   const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
+  const hours = Array.from({ length: 14 }).map((_, i) => i + 8); // 8 AM - 9 PM
 
-  const hours = Array.from({ length: 14 }).map((_, i) => i + 8); // 8 AM to 9 PM
+  // Filter sessions by My/Team view
+  const visibleSessions = scheduleView === 'mine'
+    ? sessions.filter(s => !s.studentId || s.tutor === currentTutorName || !s.tutor)
+    : sessions;
 
   const toggleAvailability = (day: number, hour: number) => {
     const timeStr = `${hour.toString().padStart(2, '0')}:00`;
     const existing = availability.find(a => a.dayOfWeek === day && a.startTime === timeStr);
-    
     if (existing) {
       setAvailability(availability.filter(a => a.id !== existing.id));
     } else {
@@ -1095,7 +1278,7 @@ const TutorSchedule = () => {
         id: Math.random().toString(36).substr(2, 9),
         dayOfWeek: day,
         startTime: timeStr,
-        endTime: `${(hour + 1).toString().padStart(2, '0')}:00`
+        endTime: `${(hour + 1).toString().padStart(2, '0')}:00`,
       }]);
     }
   };
@@ -1105,303 +1288,488 @@ const TutorSchedule = () => {
     return availability.some(a => a.dayOfWeek === day && a.startTime === timeStr);
   };
 
-  const getSessionAt = (date: Date, hour: number) => {
-    return sessions.find(s => {
-      let sessionDate: Date;
-      if (s.date === 'Today') {
-        sessionDate = new Date();
+  const getSessionAt = (date: Date, hour: number): Session | undefined => {
+    return visibleSessions.find(s => {
+      let sessionDate: Date | null = null;
+      const d = new Date(s.date);
+      if (!isNaN(d.getTime())) {
+        sessionDate = d;
       } else {
-        // Handle "Monday, Oct 24" format
         const parts = s.date.split(', ');
         const dateStr = parts.length > 1 ? parts[1] : s.date;
-        sessionDate = new Date(`${dateStr}, ${new Date().getFullYear()}`);
+        const d2 = new Date(`${dateStr}, ${new Date().getFullYear()}`);
+        if (!isNaN(d2.getTime())) sessionDate = d2;
       }
-      
-      if (!isSameDay(sessionDate, date)) return false;
-
-      // Parse "4:00 PM"
+      if (!sessionDate || !isSameDay(sessionDate, date)) return false;
       const [timePart, ampm] = s.time.split(' ');
       const [sHourStr] = timePart.split(':');
       let sHour = parseInt(sHourStr);
       if (ampm === 'PM' && sHour !== 12) sHour += 12;
       if (ampm === 'AM' && sHour === 12) sHour = 0;
-      
       return sHour === hour;
     });
   };
 
+  const openNewBooking = (date: Date, hour: number) => {
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    setSelectedSlot({ date, time: timeStr });
+    setEditingSession(null);
+    setBookingData({
+      studentId: '',
+      courseId: '',
+      tutorName: currentTutorName,
+      title: '',
+      description: '',
+      duration: 60,
+      modality: 'online',
+      location: '',
+      date: format(date, 'yyyy-MM-dd'),
+      time: timeStr,
+    });
+    setSessionModal('new');
+  };
+
+  const openEditSession = (session: Session) => {
+    setEditingSession(session);
+    setSessionModal('edit');
+    setBookingData({
+      studentId: session.studentId ?? '',
+      courseId: session.courseId ?? '',
+      tutorName: session.tutor ?? '',
+      title: session.title,
+      description: session.description ?? '',
+      duration: session.duration,
+      modality: session.modality,
+      location: session.location ?? '',
+      date: (() => {
+        const d = new Date(session.date);
+        if (!isNaN(d.getTime())) return format(d, 'yyyy-MM-dd');
+        const parts = session.date.split(', ');
+        const dateStr = parts.length > 1 ? parts[1] : session.date;
+        const d2 = new Date(`${dateStr}, ${new Date().getFullYear()}`);
+        return !isNaN(d2.getTime()) ? format(d2, 'yyyy-MM-dd') : '';
+      })(),
+      time: (() => {
+        // Convert "4:00 PM" to "16:00"
+        const [timePart, ampm] = session.time.split(' ');
+        if (!ampm) return session.time;
+        const [hStr, mStr] = timePart.split(':');
+        let h = parseInt(hStr);
+        if (ampm === 'PM' && h !== 12) h += 12;
+        if (ampm === 'AM' && h === 12) h = 0;
+        return `${h.toString().padStart(2, '0')}:${mStr || '00'}`;
+      })(),
+    });
+  };
+
   const handleSlotClick = (date: Date, hour: number) => {
-    const day = date.getDay();
-    if (isUnavailable(day, hour)) {
-      toggleAvailability(day, hour);
-    } else {
-      const session = getSessionAt(date, hour);
-      if (!session) {
-        setSelectedSlot({ date, time: `${hour.toString().padStart(2, '0')}:00` });
-        setShowBookingModal(true);
-      }
+    if (calendarMode === 'unavailable') {
+      toggleAvailability(date.getDay(), hour);
+      return;
+    }
+    const session = getSessionAt(date, hour);
+    if (session) {
+      openEditSession(session);
+    } else if (!isUnavailable(date.getDay(), hour)) {
+      openNewBooking(date, hour);
     }
   };
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
+  const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedSlot) return;
+    const dateObj = bookingData.date ? new Date(bookingData.date + 'T12:00:00') : (selectedSlot?.date ?? new Date());
+    const timeDisplay = (() => {
+      const [h, m] = bookingData.time.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
+      return `${displayH}:${(m || 0).toString().padStart(2, '0')} ${ampm}`;
+    })();
 
-    const student = students.find(s => s.id === bookingData.studentId);
-    const course = courses.find(c => c.id === bookingData.courseId);
-
-    addSession({
-      studentId: bookingData.studentId,
-      courseId: bookingData.courseId,
-      title: bookingData.title || (course ? `${course.title} Session` : 'Tutoring Session'),
-      tutor: 'Dr. Aris Thorne',
-      date: format(selectedSlot.date, 'EEEE, MMM d'),
-      time: format(parse(selectedSlot.time, 'HH:mm', new Date()), 'h:mm a'),
+    const sessionPayload = {
+      studentId: bookingData.studentId || undefined,
+      courseId: bookingData.courseId || undefined,
+      title: bookingData.title || (courses.find(c => c.id === bookingData.courseId)?.title ?? 'Tutoring Session'),
+      tutor: bookingData.tutorName,
+      date: format(dateObj, 'EEEE, MMM d'),
+      time: timeDisplay,
       duration: bookingData.duration,
-      status: 'upcoming',
-      type: 'both',
-      modality: 'online'
-    });
+      status: 'upcoming' as const,
+      type: 'both' as const,
+      modality: bookingData.modality,
+      location: bookingData.location || undefined,
+      description: bookingData.description || undefined,
+    };
 
-    setShowBookingModal(false);
-    setBookingData({ studentId: '', courseId: '', title: '', duration: 60 });
+    if (sessionModal === 'edit' && editingSession) {
+      await updateSession(editingSession.id, sessionPayload);
+    } else {
+      await addSession(sessionPayload);
+    }
+
+    setSessionModal(null);
+    setEditingSession(null);
+  };
+
+  const handleDeleteSession = async () => {
+    if (!editingSession) return;
+    if (!window.confirm('Delete this session?')) return;
+    await deleteSession(editingSession.id);
+    setSessionModal(null);
+    setEditingSession(null);
+  };
+
+  // Tutor color map for team view
+  const tutorColors = ['bg-primary', 'bg-secondary', 'bg-tertiary', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500'];
+  const tutorColorMap = Object.fromEntries(
+    tutors.map((t: import('./types').Tutor, i: number) => [t.name, tutorColors[i % tutorColors.length]])
+  );
+  const getSessionColor = (session: Session) => {
+    if (scheduleView === 'team' && session.tutor) {
+      return tutorColorMap[session.tutor] ?? 'bg-primary';
+    }
+    return 'bg-primary';
   };
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
       className="max-w-7xl mx-auto"
     >
-      <Header title="Manage Schedule" role="tutor" />
+      <Header title="Manage Schedule" />
+
+      {/* Top controls */}
+      <div className="flex flex-wrap items-center gap-3 mb-8">
+        {/* My / Team toggle */}
+        <div className="flex items-center gap-1 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5">
+          {([
+            { id: 'mine', label: 'My Schedule' },
+            { id: 'team', label: 'Team Schedule' },
+          ] as const).map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => setScheduleView(opt.id)}
+              className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${scheduleView === opt.id ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Mode: Book / Mark Unavailable */}
+        <div className="flex items-center gap-1 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5">
+          <button
+            onClick={() => setCalendarMode('book')}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${calendarMode === 'book' ? 'bg-secondary text-on-secondary shadow-md' : 'text-on-surface-variant hover:text-on-surface'}`}
+          >
+            <PlusCircle size={14} /> Book Session
+          </button>
+          <button
+            onClick={() => setCalendarMode('unavailable')}
+            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${calendarMode === 'unavailable' ? 'bg-rose-500 text-white shadow-md' : 'text-on-surface-variant hover:text-on-surface'}`}
+          >
+            <X size={14} /> Block Time
+          </button>
+        </div>
+
+        <button
+          onClick={() => setCurrentDate(new Date())}
+          className="px-4 py-2 bg-primary/10 text-primary rounded-2xl font-bold text-sm hover:bg-primary/20 transition-all"
+        >
+          Today
+        </button>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={() => setCurrentDate(subWeeks(currentDate, 1))} className="p-2 hover:bg-surface-container-high rounded-xl transition-all"><ChevronLeft size={20} /></button>
+          <span className="text-sm font-bold text-on-surface min-w-max">Week of {format(weekStart, 'MMM d, yyyy')}</span>
+          <button onClick={() => setCurrentDate(addWeeks(currentDate, 1))} className="p-2 hover:bg-surface-container-high rounded-xl transition-all"><ChevronRight size={20} /></button>
+        </div>
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-8">
-        {/* Navigation & Controls */}
-        <div className="lg:w-80 space-y-6">
-          <div className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <h4 className="text-xl font-black text-on-surface">{format(currentDate, 'MMMM yyyy')}</h4>
+        {/* Sidebar */}
+        <div className="lg:w-72 space-y-6 flex-shrink-0">
+          {/* Mini calendar */}
+          <div className="bg-surface-container-low rounded-[32px] p-6 border border-outline-variant/30">
+            <div className="flex items-center justify-between mb-4">
+              <span className="font-black text-on-surface">{format(currentDate, 'MMMM yyyy')}</span>
+              <div className="flex gap-1">
+                <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-all"><ChevronLeft size={16} /></button>
+                <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-all"><ChevronRight size={16} /></button>
+              </div>
             </div>
-            
-            <div className="grid grid-cols-7 gap-1 text-center mb-4">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(d => (
-                <span key={d} className="text-[10px] font-black text-on-surface-variant/50">{d}</span>
-              ))}
+            <div className="grid grid-cols-7 gap-1 text-center mb-2">
+              {['S','M','T','W','T','F','S'].map((d,i) => <span key={i} className="text-[10px] font-black text-on-surface-variant/50">{d}</span>)}
             </div>
-
             <div className="grid grid-cols-7 gap-1 text-center">
-              {eachDayOfInterval({
-                start: startOfMonth(currentDate),
-                end: endOfMonth(currentDate)
-              }).map((day, i) => (
-                <button 
-                  key={i}
-                  onClick={() => setCurrentDate(day)}
-                  className={`aspect-square rounded-xl text-xs font-bold flex items-center justify-center transition-all ${
-                    isSameDay(day, currentDate) 
-                      ? 'bg-primary text-on-primary shadow-lg' 
-                      : isToday(day) ? 'bg-primary/10 text-primary' : 'hover:bg-surface-container-high text-on-surface'
-                  }`}
-                >
+              {eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) }).map((day, i) => (
+                <button key={i} onClick={() => setCurrentDate(day)}
+                  className={`aspect-square rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
+                    isSameDay(day, currentDate) ? 'bg-primary text-on-primary shadow-md' :
+                    isToday(day) ? 'bg-primary/15 text-primary' : 'hover:bg-surface-container-high text-on-surface'
+                  }`}>
                   {format(day, 'd')}
                 </button>
               ))}
             </div>
+          </div>
 
-            <div className="mt-8 space-y-3">
-              <div className="flex items-center justify-between p-1 bg-surface-container-high rounded-2xl border border-outline-variant/20">
-                <button 
-                  onClick={() => setView('month')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${view === 'month' ? 'bg-surface text-on-surface shadow-sm' : 'text-on-surface-variant'}`}
-                >
-                  Month
-                </button>
-                <button 
-                  onClick={() => setView('week')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${view === 'week' ? 'bg-surface text-on-surface shadow-sm' : 'text-on-surface-variant'}`}
-                >
-                  Week
-                </button>
+          {/* Legend */}
+          <div className="bg-surface-container-low rounded-[32px] p-6 border border-outline-variant/30">
+            <p className="text-xs font-black text-on-surface-variant uppercase tracking-widest mb-4">Legend</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+                <div className="w-5 h-5 rounded-md bg-surface-container-lowest border-2 border-outline-variant/40"></div>
+                Free — click to book
               </div>
-              
-              <div className="flex gap-2">
-                <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="flex-1 py-3 bg-surface-container-high rounded-xl text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2">
-                  <ChevronLeft size={16} /> Month
-                </button>
-                <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="flex-1 py-3 bg-surface-container-high rounded-xl text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2">
-                  Month <ChevronRight size={16} />
-                </button>
+              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+                <div className="w-5 h-5 rounded-md bg-rose-200 border-2 border-rose-400"></div>
+                Blocked / Unavailable
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => setCurrentDate(subYears(currentDate, 1))} className="flex-1 py-3 bg-surface-container-high rounded-xl text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2">
-                  <ChevronLeft size={16} /> Year
-                </button>
-                <button onClick={() => setCurrentDate(addYears(currentDate, 1))} className="flex-1 py-3 bg-surface-container-high rounded-xl text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2">
-                  Year <ChevronRight size={16} />
-                </button>
+              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+                <div className="w-5 h-5 rounded-md bg-primary shadow-sm"></div>
+                Session Booked
               </div>
+              {scheduleView === 'team' && tutors.slice(0, 4).map((t: import('./types').Tutor, i: number) => (
+                <div key={t.id} className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+                  <div className={`w-5 h-5 rounded-md ${tutorColors[i % tutorColors.length]} shadow-sm`}></div>
+                  {t.name}
+                </div>
+              ))}
             </div>
           </div>
 
-          <div className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-sm">
-            <h5 className="text-sm font-black text-on-surface uppercase tracking-widest mb-4">Legend</h5>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                <div className="w-4 h-4 rounded bg-primary/10 border border-primary/20"></div> Available
-              </div>
-              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                <div className="w-4 h-4 rounded bg-surface-container-highest border border-outline-variant/30"></div> Unavailable
-              </div>
-              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                <div className="w-4 h-4 rounded bg-primary shadow-sm"></div> Session Booked
-              </div>
-            </div>
+          {/* Mode hint */}
+          <div className={`rounded-[32px] p-5 border text-sm font-semibold ${calendarMode === 'unavailable' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-secondary/5 border-secondary/20 text-secondary'}`}>
+            {calendarMode === 'book'
+              ? '📅 Click any free slot to book a session. Click an existing session to edit it.'
+              : '🚫 Click time slots to toggle them as blocked. Click again to unblock.'}
           </div>
         </div>
 
-        {/* Weekly Calendar Grid */}
-        <div className="flex-1 bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-bottom border-outline-variant/20 flex items-center justify-between bg-surface-container-high/50">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setCurrentDate(subWeeks(currentDate, 1))} className="p-2 hover:bg-surface-container-highest rounded-xl transition-all"><ChevronLeft size={20} /></button>
-              <h4 className="text-lg font-black text-on-surface">Week of {format(weekStart, 'MMM d, yyyy')}</h4>
-              <button onClick={() => setCurrentDate(addWeeks(currentDate, 1))} className="p-2 hover:bg-surface-container-highest rounded-xl transition-all"><ChevronRight size={20} /></button>
-            </div>
-            <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 bg-primary/10 text-primary rounded-xl font-bold text-xs hover:bg-primary/20 transition-all">Today</button>
-          </div>
-
-          <div className="flex-1 overflow-auto">
-            <div className="min-w-[800px]">
-              {/* Header */}
-              <div className="grid grid-cols-8 border-b border-outline-variant/20">
-                <div className="p-4 border-r border-outline-variant/20"></div>
+        {/* Weekly Grid */}
+        <div className="flex-1 bg-surface-container-low rounded-[32px] border border-outline-variant/30 overflow-hidden">
+          <div className="overflow-auto max-h-[75vh]">
+            <div className="min-w-[700px]">
+              {/* Day headers */}
+              <div className="grid grid-cols-8 border-b border-outline-variant/20 sticky top-0 z-10 bg-surface-container-high">
+                <div className="p-3 border-r border-outline-variant/20 text-[10px] text-on-surface-variant/50 text-right pr-3 self-end pb-2">Time</div>
                 {weekDays.map(day => (
-                  <div key={day.toString()} className={`p-4 text-center border-r border-outline-variant/20 ${isToday(day) ? 'bg-primary/5' : ''}`}>
+                  <div key={day.toString()}
+                    className={`p-3 text-center border-r border-outline-variant/20 ${isToday(day) ? 'bg-primary/5' : ''}`}
+                    onClick={() => setCurrentDate(day)}>
                     <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">{format(day, 'EEE')}</p>
                     <p className={`text-xl font-black ${isToday(day) ? 'text-primary' : 'text-on-surface'}`}>{format(day, 'd')}</p>
                   </div>
                 ))}
               </div>
 
-              {/* Grid Body */}
-              <div className="relative">
-                {hours.map(hour => (
-                  <div key={hour} className="grid grid-cols-8 border-b border-outline-variant/10 h-20">
-                    <div className="p-2 text-[10px] font-black text-on-surface-variant/60 text-right border-r border-outline-variant/20">
-                      {hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
-                    </div>
-                    {weekDays.map(day => {
-                      const unavailable = isUnavailable(day.getDay(), hour);
-                      const session = getSessionAt(day, hour);
-                      
-                      return (
-                        <div 
-                          key={`${day}-${hour}`}
-                          onClick={() => handleSlotClick(day, hour)}
-                          className={`relative border-r border-outline-variant/10 cursor-pointer transition-all ${
-                            unavailable ? 'bg-surface-container-highest/50' : 'hover:bg-primary/5'
-                          }`}
-                        >
-                          {session && (
-                            <div className="absolute inset-1 bg-primary text-on-primary rounded-xl p-2 shadow-lg z-10 overflow-hidden">
-                              <p className="text-[10px] font-black truncate">{session.title}</p>
-                              <p className="text-[8px] opacity-80 truncate">{session.time}</p>
-                            </div>
-                          )}
-                          {unavailable && (
-                            <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
-                              <X size={24} />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+              {/* Time rows */}
+              {hours.map(hour => (
+                <div key={hour} className="grid grid-cols-8 border-b border-outline-variant/10 h-16">
+                  <div className="p-2 text-[10px] font-bold text-on-surface-variant/60 text-right border-r border-outline-variant/20 flex items-start justify-end pt-2">
+                    {hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
                   </div>
-                ))}
-              </div>
+                  {weekDays.map(day => {
+                    const unavailable = isUnavailable(day.getDay(), hour);
+                    const session = getSessionAt(day, hour);
+                    const isBookMode = calendarMode === 'book';
+
+                    return (
+                      <div
+                        key={`${day}-${hour}`}
+                        onClick={() => handleSlotClick(day, hour)}
+                        className={`relative border-r border-outline-variant/10 cursor-pointer transition-all ${
+                          unavailable
+                            ? 'bg-rose-100 hover:bg-rose-200'
+                            : session
+                            ? ''
+                            : isBookMode
+                            ? 'hover:bg-primary/10 hover:border-primary/20'
+                            : 'hover:bg-rose-50'
+                        }`}
+                      >
+                        {session && (
+                          <div className={`absolute inset-1 ${getSessionColor(session)} text-white rounded-xl p-2 shadow-lg z-10 overflow-hidden hover:opacity-90 transition-opacity`}>
+                            <p className="text-[10px] font-black truncate">{session.title}</p>
+                            <p className="text-[9px] opacity-80 truncate">{session.time}</p>
+                            {scheduleView === 'team' && session.tutor && (
+                              <p className="text-[9px] opacity-70 truncate">{session.tutor}</p>
+                            )}
+                          </div>
+                        )}
+                        {unavailable && !session && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <div className="w-full h-full opacity-30" style={{
+                              backgroundImage: 'repeating-linear-gradient(45deg, #f43f5e 0, #f43f5e 1px, transparent 0, transparent 50%)',
+                              backgroundSize: '8px 8px',
+                            }} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Booking Modal */}
+      {/* Book / Edit Session Modal */}
       <AnimatePresence>
-        {showBookingModal && (
+        {sessionModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowBookingModal(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-2xl"
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSessionModal(null)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
             >
-              <h3 className="text-2xl font-black text-on-surface mb-6">Book Session</h3>
-              <p className="text-sm text-on-surface-variant mb-6">
-                Booking for {selectedSlot && format(selectedSlot.date, 'EEEE, MMM d')} at {selectedSlot?.time}
-              </p>
-              
-              <form onSubmit={handleBookingSubmit} className="space-y-6">
+              <div className="p-7 border-b border-outline-variant/20 bg-surface-container-high flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h3 className="text-xl font-black text-on-surface">{sessionModal === 'edit' ? 'Edit Session' : 'Book New Session'}</h3>
+                  {selectedSlot && sessionModal === 'new' && (
+                    <p className="text-xs text-on-surface-variant mt-1">
+                      {format(selectedSlot.date, 'EEEE, MMMM d')} at {selectedSlot.time}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {sessionModal === 'edit' && (
+                    <button onClick={handleDeleteSession} className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                  <button onClick={() => setSessionModal(null)} className="p-2 rounded-xl hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
+                </div>
+              </div>
+
+              <form onSubmit={handleBookingSubmit} className="p-7 space-y-5 overflow-y-auto">
+                {/* Date & Time */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Date</label>
+                    <input type="date" required value={bookingData.date}
+                      onChange={e => setBookingData(p => ({ ...p, date: e.target.value }))}
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Time</label>
+                    <input type="time" required value={bookingData.time}
+                      onChange={e => setBookingData(p => ({ ...p, time: e.target.value }))}
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                  </div>
+                </div>
+
+                {/* Duration */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Duration (hours)</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[30, 60, 90, 120].map(d => (
+                      <button key={d} type="button"
+                        onClick={() => setBookingData(p => ({ ...p, duration: d }))}
+                        className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${bookingData.duration === d ? 'bg-primary/5 border-primary text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
+                        {d < 60 ? `${d}m` : `${d / 60}h`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tutor */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Tutor</label>
+                  <select required value={bookingData.tutorName}
+                    onChange={e => setBookingData(p => ({ ...p, tutorName: e.target.value }))}
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
+                    <option value="">Select tutor</option>
+                    {tutors.map((t: import('./types').Tutor) => (
+                      <option key={t.id} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Student */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Student</label>
-                  <select 
-                    required
-                    value={bookingData.studentId}
-                    onChange={(e) => setBookingData({...bookingData, studentId: e.target.value})}
-                    className="w-full px-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="">Select a student</option>
+                  <select value={bookingData.studentId}
+                    onChange={e => setBookingData(p => ({ ...p, studentId: e.target.value }))}
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
+                    <option value="">Select student (optional)</option>
                     {students.map(s => (
                       <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
                 </div>
 
+                {/* Course */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Course</label>
-                  <select 
-                    required
-                    value={bookingData.courseId}
-                    onChange={(e) => setBookingData({...bookingData, courseId: e.target.value})}
-                    className="w-full px-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  >
-                    <option value="">Select a course</option>
+                  <select value={bookingData.courseId}
+                    onChange={e => setBookingData(p => ({ ...p, courseId: e.target.value }))}
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
+                    <option value="">Select course (optional)</option>
                     {courses.map(c => (
                       <option key={c.id} value={c.id}>{c.title}</option>
                     ))}
                   </select>
                 </div>
 
+                {/* Title */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Session Title (Optional)</label>
-                  <input 
-                    type="text"
-                    value={bookingData.title}
-                    onChange={(e) => setBookingData({...bookingData, title: e.target.value})}
-                    placeholder="e.g. Exam Prep"
-                    className="w-full px-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Session Title</label>
+                  <input type="text" value={bookingData.title}
+                    onChange={e => setBookingData(p => ({ ...p, title: e.target.value }))}
+                    placeholder="e.g. Exam Prep, Chapter 5 Review"
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
                 </div>
 
-                <div className="flex gap-4 pt-4">
-                  <button 
-                    type="button"
-                    onClick={() => setShowBookingModal(false)}
-                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all"
-                  >
+                {/* Description */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Description (Optional)</label>
+                  <textarea value={bookingData.description} rows={3}
+                    onChange={e => setBookingData(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Topics to cover, goals for this session..."
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none" />
+                </div>
+
+                {/* Modality */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Location Type</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {([
+                      { id: 'online', label: 'Virtual', hint: 'Zoom, Teams, etc.' },
+                      { id: 'in-person', label: 'In Person', hint: 'Physical location' },
+                    ] as const).map(opt => (
+                      <button key={opt.id} type="button"
+                        onClick={() => setBookingData(p => ({ ...p, modality: opt.id }))}
+                        className={`p-3 rounded-2xl border-2 text-left transition-all ${bookingData.modality === opt.id ? 'bg-primary/5 border-primary text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
+                        <p className="text-sm font-bold">{opt.label}</p>
+                        <p className="text-[10px] opacity-60 mt-0.5">{opt.hint}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Location */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">
+                    {bookingData.modality === 'online' ? 'Meeting Link' : 'Address / Room'}
+                  </label>
+                  <input type="text" value={bookingData.location}
+                    onChange={e => setBookingData(p => ({ ...p, location: e.target.value }))}
+                    placeholder={bookingData.modality === 'online' ? 'https://zoom.us/...' : '123 Main St, Room 4B'}
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setSessionModal(null)}
+                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all text-sm">
                     Cancel
                   </button>
-                  <button 
-                    type="submit"
-                    className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all"
-                  >
-                    Confirm Booking
+                  <button type="submit"
+                    className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all text-sm">
+                    {sessionModal === 'edit' ? 'Save Changes' : 'Confirm Booking'}
                   </button>
                 </div>
               </form>
@@ -1412,6 +1780,7 @@ const TutorSchedule = () => {
     </motion.div>
   );
 };
+
 
 const Schedule = () => {
   const { sessions, role, courses } = useData();
@@ -1431,7 +1800,7 @@ const Schedule = () => {
       exit={{ opacity: 0, scale: 0.98 }}
       className="max-w-7xl mx-auto"
     >
-      <Header title="Schedule" role={role || 'student'} />
+      <Header title="Schedule" />
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Calendar Sidebar */}
@@ -1606,7 +1975,7 @@ const Resources = () => {
       exit={{ opacity: 0, x: -20 }}
       className="max-w-7xl mx-auto"
     >
-      <Header title="Resources" role={role || 'student'} />
+      <Header title="Resources" />
 
       <div className="flex flex-col lg:flex-row gap-6 mb-10">
         <div className="relative flex-1">
@@ -1731,7 +2100,7 @@ const Profile = () => {
       exit={{ opacity: 0, y: -20 }}
       className="max-w-4xl mx-auto"
     >
-      <Header title="Profile" role={role || 'student'} />
+      <Header title="Profile" />
       
       <div className="bg-surface-container-low rounded-[40px] p-8 md:p-12 border border-outline-variant/30 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
@@ -1814,23 +2183,148 @@ const Profile = () => {
 };
 
 const TutorDashboard = () => {
-  const { courses, sessions, students } = useData();
-  const upcomingSessions = sessions.filter(s => s.status === 'upcoming');
+  const { courses, sessions, students, tutors, currentUserEmail } = useData();
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+
+  const currentTutorName = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
+
+  const parseSessionDate = (dateStr: string): Date | null => {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+    const d2 = new Date(`${dateStr}, ${new Date().getFullYear()}`);
+    if (!isNaN(d2.getTime())) return d2;
+    return null;
+  };
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const upcomingSessions = sessions
+    .filter(s => { const d = parseSessionDate(s.date); return d ? d >= today : s.status === 'upcoming'; })
+    .sort((a, b) => { const da = parseSessionDate(a.date); const db = parseSessionDate(b.date); return da && db ? da.getTime() - db.getTime() : 0; });
+
+  const pastSessions = sessions
+    .filter(s => { const d = parseSessionDate(s.date); return d ? d < today : s.status === 'completed'; })
+    .sort((a, b) => { const da = parseSessionDate(a.date); const db = parseSessionDate(b.date); return da && db ? db.getTime() - da.getTime() : 0; });
+
+  const myStudentIds = new Set(
+    sessions
+      .filter(s => currentTutorName && s.tutor === currentTutorName)
+      .map(s => s.studentId)
+      .filter(Boolean)
+  );
+
+  const getStudentName = (studentId?: string) =>
+    studentId ? (students.find((s: import('./types').Student) => s.id === studentId)?.name ?? 'Unknown') : 'Unassigned';
+
+  const getLocationDisplay = (session: import('./types').Session) => {
+    if (session.modality === 'online') {
+      const loc = (session.location || '').toLowerCase();
+      if (loc.includes('zoom')) return 'Zoom';
+      if (loc.includes('teams')) return 'Microsoft Teams';
+      if (loc.includes('meet')) return 'Google Meet';
+      if (session.location) return session.location;
+      return 'Virtual';
+    }
+    return session.location || 'TBD';
+  };
 
   const stats = [
-    { label: 'Total Students', value: '156', icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { label: 'Active Students', value: '42', icon: UserCheck, color: 'text-green-600', bg: 'bg-green-100' },
-    { label: 'Students', value: students.length.toString(), icon: GraduationCap, color: 'text-purple-600', bg: 'bg-purple-100' },
-    { label: 'Active Courses', value: courses.length.toString(), icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-100' },
+    { label: 'Total Students', value: students.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
+    { label: 'My Students', value: myStudentIds.size, icon: UserCheck, color: 'text-green-600', bg: 'bg-green-100' },
+    { label: 'Tutors', value: tutors.length, icon: GraduationCap, color: 'text-purple-600', bg: 'bg-purple-100' },
+    { label: 'Courses', value: courses.length, icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-100' },
   ];
 
+  const renderCards = (list: import('./types').Session[]) => (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {list.map(session => {
+        const parts = session.date.split(',');
+        const monthDay = (parts[1] || parts[0] || '').trim().split(' ');
+        const monthAbbr = monthDay[0] ?? '';
+        const dayNum = monthDay[1] ?? '';
+        const isExpanded = expandedSession === session.id;
+        return (
+          <div key={session.id} className="p-5 bg-surface-container-low rounded-3xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 bg-surface-container-high rounded-2xl flex flex-col items-center justify-center shrink-0">
+                <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-tighter">{monthAbbr}</span>
+                <span className="text-lg font-black text-on-surface">{dayNum}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h5 className="font-bold text-on-surface truncate">{session.title}</h5>
+                <p className="text-sm text-on-surface-variant mt-0.5">{getStudentName(session.studentId)} • {session.time}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  {session.modality === 'online'
+                    ? <Globe size={11} className="text-blue-500 shrink-0" />
+                    : <MapPin size={11} className="text-orange-500 shrink-0" />}
+                  <span className="text-xs text-on-surface-variant">{getLocationDisplay(session)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setExpandedSession(isExpanded ? null : session.id)}
+                className="shrink-0 p-2 rounded-xl bg-surface-container-high hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
+                title={isExpanded ? 'Collapse' : 'Expand'}
+              >
+                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
+            {isExpanded && (
+              <div className="mt-4 pt-4 border-t border-outline-variant/20 grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Day</p><p className="font-bold text-on-surface">{parts[0] ?? ''}</p></div>
+                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Duration</p><p className="font-bold text-on-surface">{session.duration} min</p></div>
+                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Modality</p><p className="font-bold text-on-surface capitalize">{session.modality}</p></div>
+                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Tutor</p><p className="font-bold text-on-surface">{session.tutor || 'TBD'}</p></div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderTable = (list: import('./types').Session[]) => (
+    <div className="bg-surface-container-low rounded-[24px] border border-outline-variant/30 overflow-hidden">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="bg-surface-container-high">
+            {['Date', 'Session', 'Student', 'Time', 'Location', 'Modality'].map(h => (
+              <th key={h} className="px-5 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {list.map(session => (
+            <tr key={session.id} className="border-t border-outline-variant/20 hover:bg-surface-container-lowest transition-colors">
+              <td className="px-5 py-4 text-sm font-bold text-on-surface whitespace-nowrap">{session.date}</td>
+              <td className="px-5 py-4 text-sm text-on-surface">{session.title}</td>
+              <td className="px-5 py-4 text-sm text-on-surface-variant">{getStudentName(session.studentId)}</td>
+              <td className="px-5 py-4 text-sm text-on-surface-variant whitespace-nowrap">{session.time}</td>
+              <td className="px-5 py-4 text-sm text-on-surface-variant">{getLocationDisplay(session)}</td>
+              <td className="px-5 py-4">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${session.modality === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                  {session.modality}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderSessions = (list: import('./types').Session[]) => {
+    if (list.length === 0) return <p className="text-sm text-on-surface-variant py-2">No sessions found.</p>;
+    return viewMode === 'card' ? renderCards(list) : renderTable(list);
+  };
+
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-    >
-      <Header title="Tutor Dashboard" role="tutor" />
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+      <Header
+        title="Tutor Dashboard"
+        subtitle={`Welcome back${currentTutorName ? `, ${currentTutorName}` : ''}! Your students are waiting.`}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
         {stats.map((stat, i) => (
@@ -1845,37 +2339,55 @@ const TutorDashboard = () => {
       </div>
 
       <div className="space-y-8">
+        <div className="flex items-center justify-between">
+          <h4 className="text-xl font-bold text-on-surface">Sessions</h4>
+          <div className="flex items-center gap-3">
+            <div className="flex bg-surface-container-high p-1 rounded-xl border border-outline-variant/20">
+              <button onClick={() => setViewMode('card')} className={`p-2 rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'}`} title="Card view">
+                <LayoutGrid size={16} />
+              </button>
+              <button onClick={() => setViewMode('table')} className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'}`} title="Table view">
+                <List size={16} />
+              </button>
+            </div>
+            <Link to="/schedule" className="text-sm font-bold text-primary hover:underline">View Schedule</Link>
+          </div>
+        </div>
+
         <section>
-          <div className="flex items-center justify-between mb-6">
-            <h4 className="text-xl font-bold text-on-surface">Upcoming Sessions</h4>
-            <Link to="/schedule" className="text-sm font-bold text-primary hover:underline">View Full Schedule</Link>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {upcomingSessions.slice(0, 4).map((session) => (
-              <div key={session.id} className="p-6 bg-surface-container-low rounded-3xl border border-outline-variant/30 flex items-center gap-6 shadow-sm hover:shadow-md transition-shadow">
-                <div className="w-16 h-16 bg-surface-container-high rounded-2xl flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-tighter">{session.date.split(' ')[1]}</span>
-                  <span className="text-xl font-black text-on-surface">{session.date.split(' ')[2]}</span>
-                </div>
-                <div className="flex-1">
-                  <h5 className="font-bold text-on-surface">{session.title}</h5>
-                  <p className="text-sm text-on-surface-variant">Student: {session.tutor} • {session.time}</p>
-                </div>
-                <button className="px-5 py-2.5 bg-primary text-on-primary rounded-xl font-bold text-sm">Start Session</button>
-              </div>
-            ))}
-          </div>
+          <h5 className="text-base font-bold text-on-surface mb-4">
+            Upcoming Sessions
+            <span className="ml-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-bold">{upcomingSessions.length}</span>
+          </h5>
+          {renderSessions(upcomingSessions)}
+        </section>
+
+        <section>
+          <h5 className="text-base font-bold text-on-surface-variant mb-4">
+            Past Sessions
+            <span className="ml-2 px-2 py-0.5 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-bold">{pastSessions.length}</span>
+          </h5>
+          {renderSessions(pastSessions)}
         </section>
       </div>
     </motion.div>
   );
 };
 
+const getLevelLabel = (level: string) => {
+  if (level === 'Elementary') return 'Elementary/Middle School';
+  if (level === 'Uni') return 'College/University';
+  return level;
+};
+
 const TutorCourses = () => {
-  const { courses, addCourse, updateCourse, deleteCourse } = useData();
+  const { courses, tutors, addCourse, updateCourse, deleteCourse } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterLevel, setFilterLevel] = useState<'All' | Course['level']>('All');
+  const [filterTutor, setFilterTutor] = useState('All');
+  const [isTutorDropdownOpen, setIsTutorDropdownOpen] = useState(false);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -1886,21 +2398,27 @@ const TutorCourses = () => {
     icon: 'book'
   });
 
-  const filteredCourses = courses.filter(c => 
-    c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const selectedTutors = formData.tutor ? formData.tutor.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const toggleTutor = (name: string) => {
+    const updated = selectedTutors.includes(name)
+      ? selectedTutors.filter(t => t !== name)
+      : [...selectedTutors, name];
+    setFormData({ ...formData, tutor: updated.join(', ') });
+  };
+
+  const filteredCourses = courses.filter(c => {
+    const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesLevel = filterLevel === 'All' || c.level === filterLevel;
+    const matchesTutor = filterTutor === 'All' || (c.tutor || '').split(',').map(s => s.trim()).includes(filterTutor);
+    return matchesSearch && matchesLevel && matchesTutor;
+  });
 
   const handleOpenAddModal = () => {
     setEditingCourse(null);
-    setFormData({
-      title: '',
-      description: '',
-      level: 'High School',
-      tutor: '',
-      image: '',
-      icon: 'book'
-    });
+    setFormData({ title: '', description: '', level: 'High School', tutor: '', image: '', icon: 'book' });
+    setIsTutorDropdownOpen(false);
     setIsModalOpen(true);
   };
 
@@ -1914,6 +2432,7 @@ const TutorCourses = () => {
       image: course.image || '',
       icon: course.icon || 'book'
     });
+    setIsTutorDropdownOpen(false);
     setIsModalOpen(true);
   };
 
@@ -1933,31 +2452,75 @@ const TutorCourses = () => {
     }
   };
 
+  const levelFilters: Array<'All' | Course['level']> = ['All', 'Elementary', 'High School', 'Uni'];
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
     >
-      <Header title="Manage Courses" role="tutor" />
-      
-      <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+      <Header title="Manage Courses" />
+
+      {/* Search + Add */}
+      <div className="flex flex-col md:flex-row items-center justify-between mb-4 gap-4">
         <div className="relative flex-1 w-full max-w-md">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" size={20} />
-          <input 
-            type="text" 
-            placeholder="Search your courses..." 
+          <input
+            type="text"
+            placeholder="Search your courses..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-12 pr-4 py-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
-        <button 
+        <button
           onClick={handleOpenAddModal}
           className="w-full md:w-auto px-6 py-4 bg-primary text-on-primary rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
         >
           <PlusCircle size={20} /> Add New Course
         </button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        {/* Level filter pills */}
+        <div className="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5">
+          {levelFilters.map(lv => (
+            <button
+              key={lv}
+              onClick={() => setFilterLevel(lv)}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                filterLevel === lv
+                  ? 'bg-primary text-on-primary shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              }`}
+            >
+              {lv === 'All' ? 'All Levels' : getLevelLabel(lv)}
+            </button>
+          ))}
+        </div>
+
+        {/* Tutor filter dropdown */}
+        <select
+          value={filterTutor}
+          onChange={(e) => setFilterTutor(e.target.value)}
+          className="px-4 py-2.5 bg-surface-container-low border border-outline-variant/30 rounded-2xl text-xs font-bold text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
+        >
+          <option value="All">All Tutors</option>
+          {tutors.map(t => (
+            <option key={t.id} value={t.name}>{t.name}</option>
+          ))}
+        </select>
+
+        {(filterLevel !== 'All' || filterTutor !== 'All') && (
+          <button
+            onClick={() => { setFilterLevel('All'); setFilterTutor('All'); }}
+            className="px-3 py-2 text-xs font-bold text-on-surface-variant hover:text-primary rounded-xl transition-colors"
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div className="bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
@@ -1967,13 +2530,13 @@ const TutorCourses = () => {
               <tr className="bg-surface-container-high">
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Course</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Level</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Tutor</th>
+                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Tutor(s)</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/20">
               {filteredCourses.map((course) => (
-                <tr 
+                <tr
                   key={course.id}
                   className="hover:bg-surface-container-lowest transition-colors"
                 >
@@ -1990,7 +2553,7 @@ const TutorCourses = () => {
                   </td>
                   <td className="px-8 py-6">
                     <span className="px-3 py-1 bg-surface-container-highest text-[10px] font-bold rounded-full text-on-surface-variant uppercase tracking-widest">
-                      {course.level}
+                      {getLevelLabel(course.level)}
                     </span>
                   </td>
                   <td className="px-8 py-6 text-sm text-on-surface-variant">
@@ -1998,13 +2561,13 @@ const TutorCourses = () => {
                   </td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button 
+                      <button
                         onClick={() => handleOpenEditModal(course)}
                         className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors"
                       >
                         <Edit3 size={18} />
                       </button>
-                      <button 
+                      <button
                         onClick={() => handleDelete(course.id)}
                         className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-red-600 transition-colors"
                       >
@@ -2033,14 +2596,14 @@ const TutorCourses = () => {
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsModalOpen(false)}
               className="absolute inset-0 bg-black/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -2050,20 +2613,20 @@ const TutorCourses = () => {
                 <h3 className="text-2xl font-black text-on-surface">
                   {editingCourse ? 'Edit Course' : 'Add New Course'}
                 </h3>
-                <button 
+                <button
                   onClick={() => setIsModalOpen(false)}
                   className="p-2 rounded-full hover:bg-surface-container-highest transition-colors"
                 >
                   <X size={24} />
                 </button>
               </div>
-              
+
               <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Course Name</label>
-                  <input 
+                  <input
                     required
-                    type="text" 
+                    type="text"
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
                     placeholder="e.g. Advanced Calculus"
@@ -2074,31 +2637,53 @@ const TutorCourses = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Educational Level</label>
-                    <select 
+                    <select
                       value={formData.level}
                       onChange={(e) => setFormData({...formData, level: e.target.value as Course['level']})}
                       className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none"
                     >
-                      <option value="Elementary">Elementary</option>
+                      <option value="Elementary">Elementary/Middle School</option>
                       <option value="High School">High School</option>
-                      <option value="Uni">University</option>
+                      <option value="Uni">College/University</option>
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Tutor Name</label>
-                    <input 
-                      type="text" 
-                      value={formData.tutor}
-                      onChange={(e) => setFormData({...formData, tutor: e.target.value})}
-                      placeholder="e.g. Dr. Aris Thorne"
-                      className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
+                    <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Tutor(s)</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsTutorDropdownOpen(!isTutorDropdownOpen)}
+                        className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-left flex items-center justify-between"
+                      >
+                        <span className={`text-sm truncate ${selectedTutors.length === 0 ? 'text-on-surface-variant' : 'text-on-surface'}`}>
+                          {selectedTutors.length > 0 ? selectedTutors.join(', ') : 'Select tutor(s)...'}
+                        </span>
+                        <ChevronDown size={16} className={`flex-shrink-0 ml-2 transition-transform ${isTutorDropdownOpen ? 'rotate-180' : ''}`} />
+                      </button>
+                      {isTutorDropdownOpen && (
+                        <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl shadow-xl z-20 overflow-hidden max-h-48 overflow-y-auto">
+                          {tutors.length === 0 ? (
+                            <p className="px-5 py-3 text-sm text-on-surface-variant">No tutors available</p>
+                          ) : tutors.map((t: import('./types').Tutor) => (
+                            <label key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-surface-container-low cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedTutors.includes(t.name)}
+                                onChange={() => toggleTutor(t.name)}
+                                className="w-4 h-4 rounded accent-primary"
+                              />
+                              <span className="text-sm text-on-surface">{t.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Description</label>
-                  <textarea 
+                  <textarea
                     required
                     rows={4}
                     value={formData.description}
@@ -2110,8 +2695,8 @@ const TutorCourses = () => {
 
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Cover Image URL</label>
-                  <input 
-                    type="url" 
+                  <input
+                    type="url"
                     value={formData.image}
                     onChange={(e) => setFormData({...formData, image: e.target.value})}
                     placeholder="https://images.unsplash.com/..."
@@ -2120,14 +2705,14 @@ const TutorCourses = () => {
                 </div>
 
                 <div className="pt-4 flex gap-4">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
                     className="flex-1 py-4 bg-surface-container-highest text-on-surface rounded-2xl font-bold hover:bg-surface-container-highest/80 transition-all"
                   >
                     Cancel
                   </button>
-                  <button 
+                  <button
                     type="submit"
                     className="flex-1 py-4 bg-primary text-on-primary rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
                   >
@@ -2143,64 +2728,459 @@ const TutorCourses = () => {
   );
 };
 
-const TutorStudents = () => {
-  const { 
-    students, courses, sessions, feedback, resources,
-    addStudent, updateStudent, deleteStudent,
-    addSession, deleteSession, addResource, deleteResource, addFeedback, deleteFeedback
-  } = useData();
-  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(null);
-  const [showAddStudent, setShowAddStudent] = useState(false);
-  const [newStudent, setNewStudent] = useState({ name: '', email: '' });
+const StudentDetail = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { students, courses, sessions, resources, tutors, updateStudent, contentPosts, addContentPost, updateContentPost, deleteContentPost } = useData();
+
+  const student = students.find(s => s.id === id);
+  const [selectedTutorName, setSelectedTutorName] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [inviteLoading, setInviteLoading] = useState(false);
 
-  // Content modal state
-  type ContentType = 'session' | 'resource' | 'feedback';
-  const [contentModal, setContentModal] = useState<{ type: ContentType; studentId: string; courseId: string } | null>(null);
-  const [contentForm, setContentForm] = useState({ title: '', contentType: 'url' as 'url' | 'text' | 'file', value: '', feedbackText: '' });
+  // Content post editor state
+  const [postEditorOpen, setPostEditorOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<ContentPost | null>(null);
+  const [postForm, setPostForm] = useState<{ title: string; description: string; items: ContentItem[] }>({ title: '', description: '', items: [] });
+  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [linkUrlInput, setLinkUrlInput] = useState('');
+  const [linkLabelInput, setLinkLabelInput] = useState('');
 
-  const handleAddContent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contentModal) return;
-    const { type, studentId, courseId } = contentModal;
+  if (!student) return <Navigate to="/students" replace />;
 
-    if (type === 'session') {
-      await addSession({
-        courseId, studentId,
-        title: contentForm.title,
-        tutor: '',
-        date: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
-        time: '',
-        duration: 0,
-        status: 'completed',
-        type: contentForm.contentType === 'url' ? 'video' : 'notes',
-        modality: 'online',
-        location: contentForm.value,
-      });
-    } else if (type === 'resource') {
-      await addResource({
-        courseId, studentId,
-        title: contentForm.title,
-        type: contentForm.contentType === 'url' ? 'video' : 'pdf',
-        icon: contentForm.contentType === 'url' ? 'play_lesson' : 'picture_as_pdf',
-        size: contentForm.value || undefined,
-      });
-    } else if (type === 'feedback') {
-      await addFeedback({
-        courseId, studentId,
-        tutor: '',
-        text: contentForm.feedbackText,
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      });
-    }
-    setContentModal(null);
-    setContentForm({ title: '', contentType: 'url', value: '', feedbackText: '' });
+  const filteredCourses = selectedTutorName
+    ? courses.filter(c => (c.tutor || '').split(',').map(s => s.trim()).includes(selectedTutorName))
+    : courses;
+
+  const toggleCourse = (courseId: string) => {
+    const isEnrolled = student.enrolledCourseIds.includes(courseId);
+    const newIds = isEnrolled
+      ? student.enrolledCourseIds.filter(cid => cid !== courseId)
+      : [...student.enrolledCourseIds, courseId];
+    updateStudent(student.id, { enrolledCourseIds: newIds });
+    if (isEnrolled && selectedCourseId === courseId) setSelectedCourseId(null);
   };
+
+  const openNewPost = () => {
+    setEditingPost(null);
+    setPostForm({ title: '', description: '', items: [] });
+    setVideoUrlInput('');
+    setLinkUrlInput('');
+    setLinkLabelInput('');
+    setPostEditorOpen(true);
+  };
+
+  const openEditPost = (post: ContentPost) => {
+    setEditingPost(post);
+    setPostForm({ title: post.title, description: post.description, items: [...post.items] });
+    setVideoUrlInput('');
+    setLinkUrlInput('');
+    setLinkLabelInput('');
+    setPostEditorOpen(true);
+  };
+
+  const closeEditor = () => { setPostEditorOpen(false); setEditingPost(null); };
+
+  const handleSavePost = async (status: 'draft' | 'published') => {
+    if (!postForm.title.trim()) return;
+    const payload = { title: postForm.title, description: postForm.description, items: postForm.items, status, courseId: selectedCourseId ?? undefined, studentId: student.id };
+    if (editingPost) {
+      await updateContentPost(editingPost.id, payload);
+    } else {
+      await addContentPost(payload);
+    }
+    closeEditor();
+  };
+
+  const addVideoItem = () => {
+    const embedUrl = toYouTubeEmbed(videoUrlInput);
+    if (!embedUrl) return;
+    setPostForm(p => ({ ...p, items: [...p.items, { type: 'video' as const, url: videoUrlInput }] }));
+    setVideoUrlInput('');
+  };
+
+  const addFileItem = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPostForm(p => ({ ...p, items: [...p.items, { type: 'file' as const, fileName: file.name, fileType: file.type }] }));
+    e.target.value = '';
+  };
+
+  const addLinkItem = () => {
+    if (!linkUrlInput.trim()) return;
+    setPostForm(p => ({ ...p, items: [...p.items, { type: 'link' as const, url: linkUrlInput, label: linkLabelInput || linkUrlInput }] }));
+    setLinkUrlInput('');
+    setLinkLabelInput('');
+  };
+
+  const removeItem = (index: number) => {
+    setPostForm(p => ({ ...p, items: p.items.filter((_, i) => i !== index) }));
+  };
+
+  const enrolledCourses = courses.filter(c => student.enrolledCourseIds.includes(c.id));
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+      <div className="mb-2">
+        <button onClick={() => navigate('/students')} className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-4 font-semibold">
+          <ChevronLeft size={18} /> Back to Students
+        </button>
+      </div>
+      <Header title={student.name} subtitle={student.email} />
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+        {[
+          { label: 'Enrolled Courses', value: student.enrolledCourseIds.length },
+          { label: 'Sessions', value: sessions.filter(s => s.studentId === student.id).length },
+          { label: 'Resources', value: resources.filter(r => r.studentId === student.id).length },
+        ].map(stat => (
+          <div key={stat.label} className="bg-surface-container-low rounded-3xl p-5 border border-outline-variant/30">
+            <p className="text-2xl font-black text-on-surface">{stat.value}</p>
+            <p className="text-xs text-on-surface-variant uppercase tracking-widest mt-1">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Course Enrollment */}
+      <section className="mb-10">
+        <div className="mb-5">
+          <h3 className="text-lg font-black text-on-surface mb-1">Course Enrollment</h3>
+          <p className="text-sm text-on-surface-variant">Filter by tutor, then enroll or unenroll the student.</p>
+        </div>
+
+        {/* Tutor filter */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={() => setSelectedTutorName(null)}
+            className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all ${selectedTutorName === null ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface'}`}
+          >
+            All Tutors
+          </button>
+          {tutors.map((t: Tutor) => (
+            <button
+              key={t.id}
+              onClick={() => setSelectedTutorName(t.name)}
+              className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${selectedTutorName === t.name ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface'}`}
+            >
+              <User size={14} /> {t.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Compact course rows */}
+        <div className="space-y-2">
+          {filteredCourses.map(course => {
+            const isEnrolled = student.enrolledCourseIds.includes(course.id);
+            return (
+              <div key={course.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-sm font-bold text-on-surface truncate">{course.title}</span>
+                  {course.tutor && (
+                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[11px] font-bold whitespace-nowrap">
+                      {course.tutor}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => toggleCourse(course.id)}
+                  className={`ml-4 flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
+                    isEnrolled
+                      ? 'bg-primary border-primary text-on-primary'
+                      : 'bg-transparent border-outline-variant/40 text-on-surface-variant hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  {isEnrolled ? 'Enrolled' : 'Enroll'}
+                </button>
+              </div>
+            );
+          })}
+          {filteredCourses.length === 0 && (
+            <p className="text-sm text-on-surface-variant py-4">No courses found for this tutor.</p>
+          )}
+        </div>
+      </section>
+
+      {/* Manage Content */}
+      {enrolledCourses.length > 0 && (
+        <section>
+          <div className="mb-5">
+            <h3 className="text-lg font-black text-on-surface mb-1">Manage Content</h3>
+            <p className="text-sm text-on-surface-variant">Select a course, then create content posts for this student.</p>
+          </div>
+
+          {/* Course tabs */}
+          <div className="flex gap-2 flex-wrap mb-6">
+            {enrolledCourses.map(course => (
+              <button
+                key={course.id}
+                onClick={() => setSelectedCourseId(selectedCourseId === course.id ? null : course.id)}
+                className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all ${
+                  selectedCourseId === course.id
+                    ? 'bg-secondary text-on-secondary shadow-md'
+                    : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                {course.title}
+              </button>
+            ))}
+          </div>
+
+          {selectedCourseId && (
+            <motion.div key={selectedCourseId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              {/* Add New Content card */}
+              <button
+                onClick={openNewPost}
+                className="w-full mb-4 flex flex-col items-center justify-center gap-2 py-8 rounded-3xl border-2 border-dashed border-outline-variant/40 hover:border-primary hover:bg-primary/5 transition-all text-on-surface-variant hover:text-primary"
+              >
+                <PlusCircle size={28} />
+                <span className="text-sm font-bold">Add New Content</span>
+              </button>
+
+              {/* Existing posts */}
+              <div className="space-y-2">
+                {contentPosts
+                  .filter(cp => cp.courseId === selectedCourseId && cp.studentId === student.id)
+                  .map(post => (
+                    <div
+                      key={post.id}
+                      onClick={() => openEditPost(post)}
+                      className="flex items-center justify-between px-5 py-4 rounded-2xl border border-outline-variant/20 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-sm font-bold text-on-surface truncate">{post.title}</span>
+                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold ${post.status === 'published' ? 'bg-green-500/15 text-green-600' : 'bg-on-surface/10 text-on-surface-variant'}`}>
+                          {post.status === 'published' ? 'Published' : 'Draft'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteContentPost(post.id); }}
+                        className="ml-4 flex-shrink-0 text-on-surface-variant hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                {contentPosts.filter(cp => cp.courseId === selectedCourseId && cp.studentId === student.id).length === 0 && (
+                  <p className="text-xs text-on-surface-variant italic px-2">No content posts yet for this course.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </section>
+      )}
+
+      {/* Content Post Editor Modal */}
+      <AnimatePresence>
+        {postEditorOpen && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={closeEditor} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div
+              initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+              onClick={e => e.stopPropagation()}
+              className="relative w-full max-w-4xl max-h-[92vh] bg-surface-container-low rounded-t-[40px] sm:rounded-[40px] border border-outline-variant/30 shadow-2xl flex flex-col overflow-hidden"
+            >
+              {/* Header */}
+              <div className="px-7 py-5 border-b border-outline-variant/20 flex items-center justify-between flex-shrink-0">
+                <h3 className="text-lg font-black text-on-surface">{editingPost ? 'Edit Content Post' : 'New Content Post'}</h3>
+                <button onClick={closeEditor} className="p-2 rounded-xl hover:bg-surface-container-high transition-colors"><X size={20} /></button>
+              </div>
+
+              {/* Body */}
+              <div className="flex flex-1 overflow-hidden">
+                {/* Form */}
+                <div className="flex-1 overflow-y-auto p-7 space-y-6">
+                  {/* Title */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Title</label>
+                    <input
+                      value={postForm.title}
+                      onChange={e => setPostForm(p => ({ ...p, title: e.target.value }))}
+                      placeholder="e.g. Introduction to Calculus"
+                      className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Description</label>
+                    <textarea
+                      value={postForm.description}
+                      rows={3}
+                      onChange={e => setPostForm(p => ({ ...p, description: e.target.value }))}
+                      placeholder="Brief description of this content..."
+                      className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none"
+                    />
+                  </div>
+
+                  {/* Add YouTube Video */}
+                  <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                    <div className="flex items-center gap-2">
+                      <Youtube size={16} className="text-red-500" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Add YouTube Video</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        value={videoUrlInput}
+                        onChange={e => setVideoUrlInput(e.target.value)}
+                        placeholder="https://youtube.com/watch?v=..."
+                        className="flex-1 px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <button type="button" onClick={addVideoItem} disabled={!toYouTubeEmbed(videoUrlInput)}
+                        className="px-4 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-primary/90 transition-colors">
+                        Add
+                      </button>
+                    </div>
+                    {toYouTubeEmbed(videoUrlInput) && (
+                      <iframe src={toYouTubeEmbed(videoUrlInput)!} width="240" height="135"
+                        className="rounded-xl border border-outline-variant/20"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                    )}
+                  </div>
+
+                  {/* Attach File */}
+                  <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                    <div className="flex items-center gap-2">
+                      <Upload size={16} className="text-secondary" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Attach File</span>
+                    </div>
+                    <label className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-outline-variant/30 rounded-xl cursor-pointer hover:border-secondary hover:bg-secondary/5 transition-all">
+                      <Upload size={16} className="text-secondary" />
+                      <span className="text-sm text-on-surface-variant">Choose file (PDF, Word, Excel, image…)</span>
+                      <input type="file" className="hidden" onChange={addFileItem} />
+                    </label>
+                  </div>
+
+                  {/* Add Link */}
+                  <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                    <div className="flex items-center gap-2">
+                      <ExternalLink size={16} className="text-tertiary" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Add Link</span>
+                    </div>
+                    <input value={linkUrlInput} onChange={e => setLinkUrlInput(e.target.value)} placeholder="https://..."
+                      className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                    <input value={linkLabelInput} onChange={e => setLinkLabelInput(e.target.value)} placeholder="Display label (optional)"
+                      className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                    <button type="button" onClick={addLinkItem} disabled={!linkUrlInput.trim()}
+                      className="px-5 py-2.5 bg-tertiary text-on-tertiary rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-tertiary/90 transition-colors">
+                      Add Link
+                    </button>
+                  </div>
+
+                  {/* Added items list */}
+                  {postForm.items.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Added Items</p>
+                      {postForm.items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between px-4 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
+                          <div className="flex items-center gap-3 min-w-0">
+                            {item.type === 'video' && <Youtube size={14} className="text-red-500 flex-shrink-0" />}
+                            {item.type === 'file' && fileIconForType(item.fileType ?? '')}
+                            {item.type === 'link' && <ExternalLink size={14} className="text-tertiary flex-shrink-0" />}
+                            <span className="text-sm truncate text-on-surface">
+                              {item.type === 'file' ? item.fileName : item.label ?? item.url}
+                            </span>
+                          </div>
+                          <button onClick={() => removeItem(i)} className="ml-3 flex-shrink-0 text-on-surface-variant hover:text-red-500 transition-colors"><X size={14} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Preview pane (desktop only) */}
+                <div className="hidden lg:flex flex-col w-80 flex-shrink-0 border-l border-outline-variant/20 overflow-y-auto p-7 space-y-4 bg-surface-container-lowest">
+                  <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant">Student Preview</p>
+                  <h4 className="text-base font-black text-on-surface">{postForm.title || 'Untitled'}</h4>
+                  {postForm.description && <p className="text-sm text-on-surface-variant leading-relaxed">{postForm.description}</p>}
+                  {postForm.items.map((item, i) => (
+                    <div key={i}>
+                      {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                        <iframe src={toYouTubeEmbed(item.url!)!} width="100%" height="135"
+                          className="rounded-xl border border-outline-variant/20" allowFullScreen />
+                      )}
+                      {item.type === 'file' && (
+                        <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                          {fileIconForType(item.fileType ?? '')}
+                          <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
+                        </div>
+                      )}
+                      {item.type === 'link' && (
+                        <div className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20">
+                          <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
+                          <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {postForm.items.length === 0 && (
+                    <p className="text-xs text-on-surface-variant/50 italic">Add items on the left to see a preview.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 px-7 py-5 border-t border-outline-variant/20 flex-shrink-0">
+                <button type="button" onClick={closeEditor}
+                  className="px-6 py-3 rounded-2xl border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container-high transition-colors">
+                  Cancel
+                </button>
+                <button type="button" onClick={() => handleSavePost('draft')} disabled={!postForm.title.trim()}
+                  className="px-6 py-3 rounded-2xl border-2 border-primary text-primary font-bold text-sm disabled:opacity-40 hover:bg-primary/5 transition-colors">
+                  Save Draft
+                </button>
+                <button type="button" onClick={() => handleSavePost('published')} disabled={!postForm.title.trim()}
+                  className="flex-1 py-3 rounded-2xl bg-primary text-on-primary font-bold text-sm disabled:opacity-40 shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
+                  Publish
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const TutorStudents = () => {
+  const { students, courses, deleteStudent } = useData();
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [newStudent, setNewStudent] = useState({ name: '', email: '', phone: '' });
+  const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [inviteTab, setInviteTab] = useState<'email' | 'sms' | 'link'>('email');
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [smsMsgCopied, setSmsMsgCopied] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const filtered = students.filter(s =>
+    s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (inviteTab === 'link') {
+      const appUrl = `${window.location.origin}${window.location.pathname}`;
+      navigator.clipboard.writeText(appUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+      return;
+    }
+    if (inviteTab === 'sms') {
+      const appUrl = window.location.origin;
+      const msg = `Hi ${newStudent.name}! You've been invited to join our tutoring platform. Visit ${appUrl} to sign up and get started.`;
+      if (newStudent.phone) {
+        window.open(`sms:${newStudent.phone.replace(/\s/g, '')}?body=${encodeURIComponent(msg)}`);
+      } else {
+        await navigator.clipboard.writeText(msg);
+        setSmsMsgCopied(true);
+        setTimeout(() => setSmsMsgCopied(false), 2000);
+      }
+      return;
+    }
     setInviteLoading(true);
     setInviteStatus('idle');
     const result = await supabaseService.inviteStudent(newStudent.name, newStudent.email);
@@ -2208,7 +3188,7 @@ const TutorStudents = () => {
     if (result) {
       setInviteStatus('success');
       setTimeout(() => {
-        setNewStudent({ name: '', email: '' });
+        setNewStudent({ name: '', email: '', phone: '' });
         setShowAddStudent(false);
         setInviteStatus('idle');
       }, 1500);
@@ -2217,100 +3197,136 @@ const TutorStudents = () => {
     }
   };
 
-  const toggleCourse = (studentId: string, courseId: string) => {
-    const student = students.find(s => s.id === studentId);
-    if (!student) return;
-
-    const isEnrolled = student.enrolledCourseIds.includes(courseId);
-    const newEnrolledIds = isEnrolled 
-      ? student.enrolledCourseIds.filter(id => id !== courseId)
-      : [...student.enrolledCourseIds, courseId];
-    
-    updateStudent(studentId, { enrolledCourseIds: newEnrolledIds });
-  };
-
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-    >
-      <div className="flex items-center justify-between mb-8">
-        <Header title="Students" role="tutor" />
-        <button 
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+      <Header title="Students" />
+
+      <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+        <div className="relative flex-1 w-full max-w-md">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant" size={20} />
+          <input
+            type="text"
+            placeholder="Search students..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-12 pr-4 py-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
+        </div>
+        <button
           onClick={() => setShowAddStudent(true)}
-          className="px-6 py-3 bg-primary text-on-primary rounded-2xl font-bold text-sm shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all flex items-center gap-2"
+          className="w-full md:w-auto px-6 py-4 bg-primary text-on-primary rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
         >
           <PlusCircle size={20} /> Add Student
         </button>
       </div>
 
-      {/* Add Student Modal */}
+      {/* Invite Modal */}
       <AnimatePresence>
         {showAddStudent && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowAddStudent(false)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-2xl"
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowAddStudent(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
             >
-              <h3 className="text-2xl font-black text-on-surface mb-2">Invite Student</h3>
-              <p className="text-sm text-on-surface-variant mb-6">We'll send them an email to set up their account.</p>
-              <form onSubmit={handleAddStudent} className="space-y-6">
+              <div className="p-8 border-b border-outline-variant/20 bg-surface-container-high">
+                <h3 className="text-2xl font-black text-on-surface mb-1">Invite Student</h3>
+                <p className="text-sm text-on-surface-variant">Send an invite via email, SMS, or share the link.</p>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex border-b border-outline-variant/20">
+                {([
+                  { id: 'email', label: 'Email', icon: Mail },
+                  { id: 'sms', label: 'SMS', icon: Phone },
+                  { id: 'link', label: 'Copy Link', icon: Link2 },
+                ] as const).map(tab => (
+                  <button key={tab.id} onClick={() => setInviteTab(tab.id)}
+                    className={`flex-1 py-3.5 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${inviteTab === tab.id ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-on-surface-variant hover:text-on-surface'}`}>
+                    <tab.icon size={15} /> {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <form onSubmit={handleAddStudent} className="p-8 space-y-5">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
-                  <input
-                    type="text"
-                    required
-                    value={newStudent.name}
-                    onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
+                  <input type="text" required value={newStudent.name}
+                    onChange={e => setNewStudent({ ...newStudent, name: e.target.value })}
                     placeholder="e.g. Alice Johnson"
-                    className="w-full px-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  />
+                    className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email Address</label>
-                  <input
-                    type="email"
-                    required
-                    value={newStudent.email}
-                    onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
-                    placeholder="e.g. alice@student.edu"
-                    className="w-full px-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                  />
-                </div>
+
+                {inviteTab === 'email' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email Address</label>
+                    <input type="email" required value={newStudent.email}
+                      onChange={e => setNewStudent({ ...newStudent, email: e.target.value })}
+                      placeholder="alice@email.com"
+                      className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                  </div>
+                )}
+
+                {inviteTab === 'sms' && (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Phone Number <span className="normal-case font-normal">(optional)</span></label>
+                      <input type="tel" value={newStudent.phone}
+                        onChange={e => setNewStudent({ ...newStudent, phone: e.target.value })}
+                        placeholder="+1 (555) 000-0000"
+                        className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Message Preview</label>
+                      <div className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm text-on-surface-variant leading-relaxed">
+                        Hi <strong>{newStudent.name || '[Student Name]'}</strong>! You've been invited to join our tutoring platform. Visit <span className="text-primary font-medium">{window.location.origin}</span> to sign up and get started.
+                      </div>
+                      <button type="button" onClick={async () => {
+                        const msg = `Hi ${newStudent.name || '[Student Name]'}! You've been invited to join our tutoring platform. Visit ${window.location.origin} to sign up and get started.`;
+                        await navigator.clipboard.writeText(msg);
+                        setSmsMsgCopied(true);
+                        setTimeout(() => setSmsMsgCopied(false), 2000);
+                      }} className="flex items-center gap-1.5 text-xs font-bold text-primary mt-1 ml-1">
+                        {smsMsgCopied ? <><Check size={12} /> Copied!</> : <><Link2 size={12} /> Copy message</>}
+                      </button>
+                    </div>
+                    <p className="text-xs text-on-surface-variant ml-1">
+                      {newStudent.phone ? 'Click "Open SMS App" to send on mobile.' : 'Enter a phone number to open your SMS app, or copy the message to send manually.'}
+                    </p>
+                  </div>
+                )}
+
+                {inviteTab === 'link' && (
+                  <div className="bg-surface-container-high rounded-2xl p-4 text-sm text-on-surface-variant">
+                    Copies the app link to your clipboard. Send it to your student however you prefer.
+                  </div>
+                )}
+
                 {inviteStatus === 'success' && (
                   <p className="text-sm text-green-600 bg-green-50 rounded-2xl px-4 py-3 flex items-center gap-2">
-                    <CheckCircle2 size={16} /> Invite sent successfully!
+                    <CheckCircle2 size={16} /> Invite sent!
                   </p>
                 )}
                 {inviteStatus === 'error' && (
                   <p className="text-sm text-red-500 bg-red-50 rounded-2xl px-4 py-3">
-                    Failed to send invite. Check your service role key in .env.local.
+                    Failed to send invite. The email may already have an account, or the service role key is missing from .env.local.
                   </p>
                 )}
-                <div className="flex gap-4 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddStudent(false)}
-                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all"
-                  >
+
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setShowAddStudent(false)}
+                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all text-sm">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={inviteLoading || inviteStatus === 'success'}
-                    className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all disabled:opacity-70 flex items-center justify-center gap-2"
-                  >
-                    {inviteLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><Mail size={18} /> Send Invite</>}
+                  <button type="submit" disabled={inviteLoading || inviteStatus === 'success'}
+                    className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 transition-all disabled:opacity-70 flex items-center justify-center gap-2 text-sm">
+                    {inviteLoading
+                      ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      : inviteTab === 'email' ? <><Mail size={16} /> Send Email</>
+                      : inviteTab === 'sms' ? (newStudent.phone ? <><Phone size={16} /> Open SMS App</> : <><Link2 size={16} /> {smsMsgCopied ? 'Copied!' : 'Copy Message'}</>)
+                      : linkCopied ? <><Check size={16} /> Copied!</>
+                      : <><Link2 size={16} /> Copy Link</>
+                    }
                   </button>
                 </div>
               </form>
@@ -2319,101 +3335,7 @@ const TutorStudents = () => {
         )}
       </AnimatePresence>
 
-      {/* Content Add Modal */}
-      <AnimatePresence>
-        {contentModal && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-            onClick={() => setContentModal(null)}
-          >
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-2xl"
-              onClick={e => e.stopPropagation()}
-            >
-              <h3 className="text-2xl font-black text-on-surface mb-6">
-                {contentModal.type === 'session' ? 'Add Video / Note' : contentModal.type === 'resource' ? 'Add Resource' : 'Add Feedback'}
-              </h3>
-
-              <form onSubmit={handleAddContent} className="space-y-5">
-                {contentModal.type !== 'feedback' && (
-                  <>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Title</label>
-                      <input required value={contentForm.title}
-                        onChange={e => setContentForm(p => ({ ...p, title: e.target.value }))}
-                        placeholder="e.g. Introduction to Calculus"
-                        className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Content Type</label>
-                      <div className="flex gap-2">
-                        {(['url', 'text', 'file'] as const).map(t => (
-                          <button key={t} type="button"
-                            onClick={() => setContentForm(p => ({ ...p, contentType: t }))}
-                            className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all capitalize ${contentForm.contentType === t ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'}`}>
-                            {t === 'url' ? 'URL / Link' : t === 'text' ? 'Text / Notes' : 'File'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {contentForm.contentType === 'url' && (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">URL</label>
-                        <input type="url" value={contentForm.value}
-                          onChange={e => setContentForm(p => ({ ...p, value: e.target.value }))}
-                          placeholder="https://youtube.com/..."
-                          className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                      </div>
-                    )}
-                    {contentForm.contentType === 'text' && (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Notes</label>
-                        <textarea value={contentForm.value} rows={4}
-                          onChange={e => setContentForm(p => ({ ...p, value: e.target.value }))}
-                          placeholder="Write your notes here..."
-                          className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
-                      </div>
-                    )}
-                    {contentForm.contentType === 'file' && (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">File URL or Name</label>
-                        <input value={contentForm.value}
-                          onChange={e => setContentForm(p => ({ ...p, value: e.target.value }))}
-                          placeholder="e.g. chapter1.pdf or a file URL"
-                          className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {contentModal.type === 'feedback' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Feedback</label>
-                    <textarea required value={contentForm.feedbackText} rows={5}
-                      onChange={e => setContentForm(p => ({ ...p, feedbackText: e.target.value }))}
-                      placeholder="Write your feedback for this student..."
-                      className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none" />
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setContentModal(null)}
-                    className="flex-1 py-3 rounded-2xl border border-outline-variant/30 text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-colors">
-                    Cancel
-                  </button>
-                  <button type="submit"
-                    className="flex-1 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm hover:opacity-90 transition-opacity">
-                    Add
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
+      {/* Student Table */}
       <div className="bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -2421,225 +3343,79 @@ const TutorStudents = () => {
               <tr className="bg-surface-container-high">
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Student</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Enrolled Courses</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Last Activity</th>
+                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Last Active</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/20">
-              {students.map((student) => {
-                const isExpanded = expandedStudentId === student.id;
-                return (
-                  <React.Fragment key={student.id}>
-                    <tr 
-                      className={`hover:bg-surface-container-lowest transition-colors cursor-pointer ${isExpanded ? 'bg-surface-container-lowest' : ''}`}
-                      onClick={() => setExpandedStudentId(isExpanded ? null : student.id)}
-                    >
-                      <td className="px-8 py-6">
-                        <div>
-                          <p className="font-bold text-on-surface">{student.name}</p>
-                          <p className="text-xs text-on-surface-variant">{student.email}</p>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6">
-                        <div className="flex flex-wrap gap-2">
-                          {student.enrolledCourseIds.map(id => {
-                            const course = courses.find(c => c.id === id);
-                            return (
-                              <span key={id} className="px-2 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-md">
-                                {course?.title || id}
-                              </span>
-                            );
-                          })}
-                          {student.enrolledCourseIds.length === 0 && (
-                            <span className="text-[10px] text-on-surface-variant italic">No courses enrolled</span>
+              {filtered.map(student => (
+                <tr key={student.id}
+                  className="hover:bg-surface-container-lowest transition-colors cursor-pointer"
+                  onClick={() => navigate(`/students/${student.id}`)}
+                >
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
+                        <User size={18} />
+                      </div>
+                      <div>
+                        <p className="font-bold text-on-surface">{student.name}</p>
+                        <p className="text-xs text-on-surface-variant">{student.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(() => {
+                        const validCourses = student.enrolledCourseIds
+                          .map(id => courses.find(c => c.id === id))
+                          .filter(Boolean);
+                        return <>
+                          {validCourses.slice(0, 3).map(course => (
+                            <span key={course!.id} className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-lg">{course!.title}</span>
+                          ))}
+                          {validCourses.length > 3 && (
+                            <span className="px-2.5 py-1 bg-surface-container-high text-on-surface-variant text-[10px] font-bold rounded-lg">+{validCourses.length - 3} more</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 text-sm text-on-surface-variant">{student.lastActivity}</td>
-                      <td className="px-8 py-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if(confirm('Are you sure you want to remove this student?')) deleteStudent(student.id);
-                            }}
-                            className="p-2 text-on-surface-variant hover:text-red-600 transition-colors"
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                          <div className={`p-2 rounded-full transition-all ${isExpanded ? 'bg-primary text-on-primary rotate-180' : 'bg-primary/5 text-primary'}`}>
-                            <ChevronDown size={18} />
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                    
-                    {/* Expanded Row */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan={4} className="p-0 border-none">
-                            <motion.div 
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              className="bg-surface-container-lowest/50 border-t border-outline-variant/10"
-                            >
-                              <div className="p-8 space-y-8">
-                                {/* Course Enrollment Management */}
-                                <section>
-                                  <h4 className="text-sm font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
-                                    <BookOpen size={16} /> Course Enrollment
-                                  </h4>
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {courses.map(course => {
-                                      const isEnrolled = student.enrolledCourseIds.includes(course.id);
-                                      return (
-                                        <button 
-                                          key={course.id}
-                                          onClick={() => toggleCourse(student.id, course.id)}
-                                          className={`p-4 rounded-2xl border transition-all text-left flex items-center justify-between group ${
-                                            isEnrolled 
-                                              ? 'bg-primary/5 border-primary/30 text-primary' 
-                                              : 'bg-surface-container-low border-outline-variant/20 text-on-surface-variant hover:border-primary/30'
-                                          }`}
-                                        >
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold truncate">{course.title}</p>
-                                            <p className="text-[10px] uppercase tracking-wider opacity-70">{course.level}</p>
-                                          </div>
-                                          {isEnrolled ? <CheckCircle2 size={18} /> : <PlusCircle size={18} className="opacity-0 group-hover:opacity-100 transition-opacity" />}
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </section>
-
-                                {/* Course Content Management */}
-                                {student.enrolledCourseIds.length > 0 && (
-                                  <section>
-                                    <h4 className="text-sm font-black text-secondary uppercase tracking-widest mb-4 flex items-center gap-2">
-                                      <Settings size={16} /> Manage Student Content
-                                    </h4>
-                                    <div className="flex gap-4 mb-6 overflow-x-auto pb-2 no-scrollbar">
-                                      {student.enrolledCourseIds.map(id => {
-                                        const course = courses.find(c => c.id === id);
-                                        return (
-                                          <button 
-                                            key={id}
-                                            onClick={() => setSelectedCourseId(id)}
-                                            className={`px-6 py-3 rounded-2xl text-sm font-bold whitespace-nowrap transition-all ${
-                                              selectedCourseId === id 
-                                                ? 'bg-secondary text-on-secondary shadow-lg' 
-                                                : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                                            }`}
-                                          >
-                                            {course?.title || id}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-
-                                    {selectedCourseId && (
-                                      <div className="space-y-6 bg-surface-container-low/50 p-6 rounded-[32px] border border-outline-variant/20">
-                                        <div className="flex items-center justify-between mb-2">
-                                          <h5 className="text-lg font-bold text-on-surface">
-                                            {courses.find(c => c.id === selectedCourseId)?.title} - Content
-                                          </h5>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                          {/* Videos & Notes */}
-                                          <div className="space-y-4">
-                                            <div className="flex items-center justify-between">
-                                              <h6 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">Videos & Notes</h6>
-                                              <button
-                                                onClick={() => setContentModal({ type: 'session', studentId: student.id, courseId: selectedCourseId })}
-                                                className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
-                                              >
-                                                <PlusCircle size={16} />
-                                              </button>
-                                            </div>
-                                            <div className="space-y-2">
-                                              {sessions.filter(s => s.courseId === selectedCourseId && s.studentId === student.id).map(session => (
-                                                <div key={session.id} className="flex items-center justify-between p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/10">
-                                                  <div className="flex items-center gap-3">
-                                                    <Play size={14} className="text-primary" />
-                                                    <span className="text-sm font-medium">{session.title}</span>
-                                                  </div>
-                                                  <button onClick={() => deleteSession(session.id)} className="text-on-surface-variant hover:text-red-600">
-                                                    <Trash2 size={14} />
-                                                  </button>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-
-                                          {/* Resources */}
-                                          <div className="space-y-4">
-                                            <div className="flex items-center justify-between">
-                                              <h6 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">Resources</h6>
-                                              <button
-                                                onClick={() => setContentModal({ type: 'resource', studentId: student.id, courseId: selectedCourseId })}
-                                                className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
-                                              >
-                                                <PlusCircle size={16} />
-                                              </button>
-                                            </div>
-                                            <div className="space-y-2">
-                                              {resources.filter(r => r.courseId === selectedCourseId && r.studentId === student.id).map(res => (
-                                                <div key={res.id} className="flex items-center justify-between p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/10">
-                                                  <div className="flex items-center gap-3">
-                                                    <FileText size={14} className="text-primary" />
-                                                    <span className="text-sm font-medium">{res.title}</span>
-                                                  </div>
-                                                  <button onClick={() => deleteResource(res.id)} className="text-on-surface-variant hover:text-red-600">
-                                                    <Trash2 size={14} />
-                                                  </button>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-
-                                          {/* Feedback */}
-                                          <div className="space-y-4 lg:col-span-2">
-                                            <div className="flex items-center justify-between">
-                                              <h6 className="text-xs font-black text-on-surface-variant uppercase tracking-widest">Feedback</h6>
-                                              <button
-                                                onClick={() => setContentModal({ type: 'feedback', studentId: student.id, courseId: selectedCourseId })}
-                                                className="p-1.5 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
-                                              >
-                                                <PlusCircle size={16} />
-                                              </button>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                              {feedback.filter(f => f.courseId === selectedCourseId && f.studentId === student.id).map(f => (
-                                                <div key={f.id} className="p-4 bg-tertiary-container/10 rounded-xl border border-tertiary/10 relative group">
-                                                  <p className="text-xs text-tertiary/80 italic mb-2">"{f.text}"</p>
-                                                  <div className="flex justify-between items-center">
-                                                    <span className="text-[10px] font-bold text-tertiary uppercase tracking-wider">{f.date}</span>
-                                                    <button onClick={() => deleteFeedback(f.id)} className="text-tertiary/60 hover:text-red-600">
-                                                      <Trash2 size={12} />
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </section>
-                                )}
-                              </div>
-                            </motion.div>
-                          </td>
-                        </tr>
-                      )}
-                    </AnimatePresence>
-                  </React.Fragment>
-                );
-              })}
+                          {validCourses.length === 0 && <span className="text-[10px] text-on-surface-variant italic">No courses</span>}
+                        </>;
+                      })()}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-sm text-on-surface-variant">{formatLastActivity(student.lastActivity)}</td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Delete ${student.name}? This will also remove their account.`)) return;
+                          setDeletingId(student.id);
+                          await deleteStudent(student.id);
+                          setDeletingId(null);
+                        }}
+                        disabled={deletingId === student.id}
+                        className="p-2 rounded-lg text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                      >
+                        {deletingId === student.id
+                          ? <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                          : <Trash2 size={16} />
+                        }
+                      </button>
+                      <button onClick={() => navigate(`/students/${student.id}`)}
+                        className="p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors">
+                        <ChevronRight size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr><td colSpan={4} className="px-8 py-20 text-center">
+                  <div className="flex flex-col items-center gap-4 text-on-surface-variant">
+                    <Users size={48} className="opacity-20" />
+                    <p className="font-bold">No students found.</p>
+                  </div>
+                </td></tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -2771,9 +3547,7 @@ const TutorsList = () => {
 };
 
 const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [showPassword, setShowPassword] = useState(false);
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -2784,22 +3558,13 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
     setIsLoading(true);
     setError('');
     try {
-      if (mode === 'signin') {
-        const data = await supabaseService.signIn(email, password);
-        if (data.user) {
-          const profile = await supabaseService.getProfile(data.user.id);
-          if (profile) {
-            onLogin(profile.role);
-          } else {
-            setError('No account found. Please sign up first.');
-          }
-        }
-      } else {
-        // Sign up is tutor-only; students receive invite links
-        await supabaseService.signUp(email, password, name);
-        const data = await supabaseService.signIn(email, password);
-        if (data.user) {
-          onLogin('tutor');
+      const data = await supabaseService.signIn(email, password);
+      if (data.user) {
+        const profile = await supabaseService.getProfile(data.user.id);
+        if (profile) {
+          onLogin(profile.role);
+        } else {
+          setError('No account found. Please contact your administrator.');
         }
       }
     } catch (err: any) {
@@ -2829,43 +3594,13 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
           <p className="text-on-surface-variant">Elevate your academic journey</p>
         </div>
 
-        {/* Sign In / Sign Up toggle */}
-        <div className="flex bg-surface-container-high p-1.5 rounded-2xl mb-6 border border-outline-variant/20">
-          <button onClick={() => { setMode('signin'); setError(''); }}
-            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'signin' ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
-            Sign In
-          </button>
-          <button onClick={() => { setMode('signup'); setError(''); }}
-            className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${mode === 'signup' ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>
-            Sign Up
-          </button>
-        </div>
-
-        {mode === 'signup' && (
-          <p className="text-sm text-on-surface-variant bg-surface-container-high rounded-2xl px-4 py-3 mb-2">
-            Tutor sign-up only. Students join via invite link.
-          </p>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-5">
-          {mode === 'signup' && (
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
-                <input type="text" required value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Mateo Builes"
-                  className="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
-              </div>
-            </div>
-          )}
-
           <div className="space-y-2">
             <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email Address</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
               <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                placeholder="mateo@scholar.edu"
+                placeholder="you@example.com"
                 className="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" />
             </div>
           </div>
@@ -2893,18 +3628,14 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
             {isLoading ? (
               <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : (
-              <>{mode === 'signin' ? 'Sign In' : 'Create Tutor Account'} <ArrowRight size={20} /></>
+              <>Sign In <ArrowRight size={20} /></>
             )}
           </button>
         </form>
 
         <div className="mt-8">
           <p className="text-sm text-on-surface-variant text-center">
-            {mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
-            <button onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(''); }}
-              className="text-primary font-bold hover:underline">
-              {mode === 'signin' ? 'Sign Up' : 'Sign In'}
-            </button>
+            New here? You need an invite link to create an account.
           </p>
         </div>
       </motion.div>
@@ -2914,13 +3645,26 @@ const Login = ({ onLogin }: { onLogin: (role: string) => void }) => {
 
 const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    supabaseService.getCurrentUser().then(user => {
+      if (user?.email) setEmail(user.email);
+    });
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
     setIsLoading(true);
     setError('');
     try {
@@ -2949,12 +3693,12 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
             <BrainCircuit size={32} />
           </div>
           <h1 className="text-3xl font-black tracking-tight text-on-surface mb-2">Welcome!</h1>
-          <p className="text-on-surface-variant">Set up your student account to get started.</p>
+          <p className="text-on-surface-variant">Set up your account to get started.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Your Name</label>
+            <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
             <div className="relative">
               <User className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
               <input
@@ -2969,7 +3713,20 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Choose a Password</label>
+            <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
+              <input
+                type="email"
+                value={email}
+                readOnly
+                className="w-full pl-12 pr-4 py-4 bg-surface-container-high border border-outline-variant/30 rounded-2xl text-on-surface-variant cursor-default"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">New Password</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
               <input
@@ -2980,12 +3737,28 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
                 placeholder="••••••••"
                 className="w-full pl-12 pr-12 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
               />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant hover:text-on-surface transition-colors"
-              >
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant hover:text-on-surface transition-colors">
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Re-enter New Password</label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={20} />
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                required
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full pl-12 pr-12 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+              />
+              <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant hover:text-on-surface transition-colors">
+                {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
           </div>
@@ -3015,14 +3788,36 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isInvite, setIsInvite] = useState(() => {
+    // Implicit flow: hash contains type=invite
     const hash = window.location.hash;
     return hash.includes('type=invite') || hash.includes('type=recovery');
   });
   const { role: userRole, setRole: setUserRole, setCurrentUserEmail } = useData();
 
   useEffect(() => {
-    if (isInvite) return;
+    // PKCE invite flow: Supabase redirects with ?code= in the URL.
+    // The SDK auto-exchanges it and fires SIGNED_IN. We only listen for this
+    // when the URL actually has a code param (invite links), not during normal login.
+    const hasPKCECode = new URLSearchParams(window.location.search).has('code');
 
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    if (hasPKCECode) {
+      const { data } = supabaseService.onAuthStateChange(async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          const profile = await supabaseService.getProfile(session.user.id);
+          if (!profile) {
+            setIsInvite(true);
+            // Clean the ?code= from the URL so it doesn't re-trigger
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+          // If they do have a profile, normal login flow handles it
+        }
+      });
+      subscription = data.subscription;
+    }
+
+    // Restore an existing session on page load / refresh (normal users)
     supabaseService.getSession().then(session => {
       if (session) {
         supabaseService.getProfile(session.user.id).then(profile => {
@@ -3034,6 +3829,8 @@ export default function App() {
         });
       }
     });
+
+    return () => subscription?.unsubscribe();
   }, []);
 
   const handleLogin = async (role: string) => {
@@ -3083,6 +3880,7 @@ export default function App() {
                         <Route path="/" element={<TutorDashboard />} />
                         <Route path="/courses" element={<TutorCourses />} />
                         <Route path="/students" element={<TutorStudents />} />
+                        <Route path="/students/:id" element={<StudentDetail />} />
                         <Route path="/tutors" element={<TutorsList />} />
                         <Route path="/schedule" element={<TutorSchedule />} />
                         <Route path="/analytics" element={<TutorAnalytics />} />

@@ -22,6 +22,7 @@ export interface Session {
   type: 'video' | 'notes' | 'both';
   modality: 'online' | 'in-person';
   location?: string;
+  description?: string;
   image?: string;
 }
 
@@ -67,4 +68,30 @@ export interface Tutor {
   email: string;
   subjects?: string[];
   lastActivity?: string;
+}
+
+export interface Earning {
+  id: string;
+  month: string;  // 'Jan', 'Feb', etc.
+  year: number;
+  amount: number;
+}
+
+export interface ContentItem {
+  type: 'video' | 'file' | 'link';
+  url?: string;
+  label?: string;
+  fileName?: string;
+  fileType?: string;
+}
+
+export interface ContentPost {
+  id: string;
+  courseId?: string;
+  studentId?: string;
+  title: string;
+  description: string;
+  items: ContentItem[];
+  status: 'draft' | 'published';
+  createdAt: string;
 }

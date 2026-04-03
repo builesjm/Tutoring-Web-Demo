@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Course, Session, Feedback, Resource, Student, Availability, Tutor } from '../types';
+import { Course, Session, Feedback, Resource, Student, Availability, Tutor, Earning, ContentPost } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { SESSIONS, FEEDBACK, RESOURCES, STUDENTS } from '../constants';
 
@@ -24,6 +24,7 @@ interface DataContextType {
   updateStudent: (id: string, updates: Partial<Student>) => Promise<void>;
   deleteStudent: (id: string) => Promise<void>;
   addSession: (session: Omit<Session, 'id'>) => Promise<void>;
+  updateSession: (id: string, updates: Partial<Session>) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
   addResource: (resource: Omit<Resource, 'id'>) => Promise<void>;
   deleteResource: (id: string) => Promise<void>;
@@ -32,6 +33,12 @@ interface DataContextType {
   setAvailability: (availability: Availability[]) => void;
   addTutor: (tutor: Omit<Tutor, 'id'>) => Promise<void>;
   deleteTutor: (id: string) => Promise<void>;
+  earnings: Earning[];
+  upsertEarning: (earning: Omit<Earning, 'id'>) => Promise<void>;
+  contentPosts: ContentPost[];
+  addContentPost: (post: Omit<ContentPost, 'id' | 'createdAt'>) => Promise<void>;
+  updateContentPost: (id: string, updates: Partial<Omit<ContentPost, 'id' | 'createdAt'>>) => Promise<void>;
+  deleteContentPost: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -43,6 +50,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [resources, setResources] = useState<Resource[]>(RESOURCES);
   const [students, setStudents] = useState<Student[]>(STUDENTS);
   const [tutors, setTutors] = useState<Tutor[]>([]);
+  const [earnings, setEarnings] = useState<Earning[]>([]);
+  const [contentPosts, setContentPosts] = useState<ContentPost[]>([]);
   const [availability, setAvailabilityState] = useState<Availability[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
@@ -51,13 +60,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [c, s, f, r, st, t] = await Promise.all([
+      const [c, s, f, r, st, t, e, cp] = await Promise.all([
         supabaseService.getCourses(),
         supabaseService.getSessions(),
         supabaseService.getFeedback(),
         supabaseService.getResources(),
         supabaseService.getStudents(),
         supabaseService.getTutors(),
+        supabaseService.getEarnings(),
+        supabaseService.getContentPosts(),
       ]);
 
       setCourses(c);
@@ -66,6 +77,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       if (r.length > 0) setResources(r);
       if (st.length > 0) setStudents(st);
       setTutors(t);
+      setEarnings(e);
+      setContentPosts(cp);
     } catch (error) {
       console.error('Error loading data from Supabase:', error);
     } finally {
@@ -92,8 +105,31 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const deleteCourse = async (id: string) => {
-    await supabaseService.deleteCourse(id);
+    await Promise.all([
+      supabaseService.deleteCourse(id),
+      supabaseService.deleteSessionsByCourse(id),
+      supabaseService.deleteResourcesByCourse(id),
+      supabaseService.deleteFeedbackByCourse(id),
+      supabaseService.deleteContentPostsByCourse(id),
+    ]);
+    const affected = students.filter(s => s.enrolledCourseIds.includes(id));
+    await Promise.all(
+      affected.map(s => supabaseService.updateStudent(s.id, {
+        enrolledCourseIds: s.enrolledCourseIds.filter(cid => cid !== id),
+      }))
+    );
     setCourses(prev => prev.filter(c => c.id !== id));
+    setSessions(prev => prev.filter(s => s.courseId !== id));
+    setResources(prev => prev.filter(r => r.courseId !== id));
+    setFeedback(prev => prev.filter(f => f.courseId !== id));
+    setContentPosts(prev => prev.filter(cp => cp.courseId !== id));
+    setStudents(prev =>
+      prev.map(s =>
+        s.enrolledCourseIds.includes(id)
+          ? { ...s, enrolledCourseIds: s.enrolledCourseIds.filter(cid => cid !== id) }
+          : s
+      )
+    );
   };
 
   const addStudent = async (student: Omit<Student, 'id'>) => {
@@ -125,6 +161,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setSessions(prev => [...prev, result]);
     } else {
       setSessions(prev => [...prev, { ...session, id: Math.random().toString(36).substr(2, 9) } as Session]);
+    }
+  };
+
+  const updateSession = async (id: string, updates: Partial<Session>) => {
+    const result = await supabaseService.updateSession(id, updates);
+    if (result) {
+      setSessions(prev => prev.map(s => s.id === id ? result : s));
+    } else {
+      setSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
     }
   };
 
@@ -175,9 +220,53 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     setTutors(prev => prev.filter(t => t.id !== id));
   };
 
+  const addContentPost = async (post: Omit<ContentPost, 'id' | 'createdAt'>) => {
+    const result = await supabaseService.addContentPost(post);
+    if (result) {
+      setContentPosts(prev => [...prev, result]);
+    } else {
+      setContentPosts(prev => [...prev, { ...post, id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+    }
+  };
+
+  const updateContentPost = async (id: string, updates: Partial<Omit<ContentPost, 'id' | 'createdAt'>>) => {
+    const result = await supabaseService.updateContentPost(id, updates);
+    if (result) {
+      setContentPosts(prev => prev.map(cp => cp.id === id ? result : cp));
+    } else {
+      setContentPosts(prev => prev.map(cp => cp.id === id ? { ...cp, ...updates } : cp));
+    }
+  };
+
+  const deleteContentPost = async (id: string) => {
+    await supabaseService.deleteContentPost(id);
+    setContentPosts(prev => prev.filter(cp => cp.id !== id));
+  };
+
+  const upsertEarning = async (earning: Omit<Earning, 'id'>) => {
+    const result = await supabaseService.upsertEarning(earning);
+    if (result) {
+      setEarnings(prev => {
+        const idx = prev.findIndex(e => e.month === earning.month && e.year === earning.year);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = result;
+          return updated;
+        }
+        return [...prev, result];
+      });
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (role === 'student' && currentUserEmail) {
+      supabaseService.updateStudentLastActivity(currentUserEmail);
+    }
+  }, [role, currentUserEmail]);
 
   return (
     <DataContext.Provider value={{
@@ -200,6 +289,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       updateStudent,
       deleteStudent,
       addSession,
+      updateSession,
       deleteSession,
       addResource,
       deleteResource,
@@ -209,6 +299,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setAvailability: setAvailabilityState,
       addTutor,
       deleteTutor,
+      earnings,
+      upsertEarning,
+      contentPosts,
+      addContentPost,
+      updateContentPost,
+      deleteContentPost,
     }}>
       {children}
     </DataContext.Provider>

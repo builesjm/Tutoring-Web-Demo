@@ -51,3 +51,11 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Global button hover glow */
+button:not(:disabled):not([data-no-glow]) {
+  transition: box-shadow 0.2s ease, transform 0.15s ease;
+}
+button:not(:disabled):not([data-no-glow]):hover {
+  box-shadow: 0 0 0 3px rgba(79, 100, 91, 0.18), 0 4px 14px rgba(79, 100, 91, 0.14);
+}
