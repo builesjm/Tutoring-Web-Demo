@@ -174,6 +174,21 @@ export const supabaseService = {
     return data as Tutor;
   },
 
+  async inviteTutor(name: string, email: string): Promise<Tutor | null> {
+    if (!supabaseAdmin) {
+      console.error('Service role key not configured. Cannot send invites.');
+      return null;
+    }
+    const record = { id: crypto.randomUUID(), name, email, subjects: [], lastActivity: 'Invited' };
+    const { data: tutorData, error: tutorError } = await supabase.from('tutors').insert([record]).select().single();
+    if (tutorError) { console.error('Error adding tutor:', tutorError); return null; }
+    const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      data: { role: 'tutor', name },
+    });
+    if (inviteError) { console.error('Error sending tutor invite:', inviteError); }
+    return tutorData as Tutor;
+  },
+
   async deleteTutor(id: string): Promise<boolean> {
     const { error } = await supabase.from('tutors').delete().eq('id', id);
     if (error) { console.error('Error deleting tutor:', error); return false; }
@@ -205,7 +220,8 @@ export const supabaseService = {
     const { data, error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
     if (data.user) {
-      await supabase.from('profiles').upsert([{ id: data.user.id, role: 'student', name, email: data.user.email }]);
+      const role = data.user.user_metadata?.role ?? 'student';
+      await supabase.from('profiles').upsert([{ id: data.user.id, role, name, email: data.user.email }]);
     }
     return data;
   },

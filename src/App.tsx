@@ -3429,6 +3429,8 @@ const TutorsList = () => {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [newTutor, setNewTutor] = useState({ name: '', email: '' });
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteStatus, setInviteStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const filtered = tutors.filter(t =>
     t.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -3437,9 +3439,21 @@ const TutorsList = () => {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    await addTutor({ name: newTutor.name, email: newTutor.email, subjects: [], lastActivity: 'Just now' });
-    setNewTutor({ name: '', email: '' });
-    setShowModal(false);
+    setInviteLoading(true);
+    setInviteStatus('idle');
+    const result = await supabaseService.inviteTutor(newTutor.name, newTutor.email);
+    if (result) {
+      addTutor({ name: result.name, email: result.email, subjects: result.subjects ?? [], lastActivity: result.lastActivity ?? 'Invited' });
+      setInviteStatus('success');
+      setTimeout(() => {
+        setNewTutor({ name: '', email: '' });
+        setShowModal(false);
+        setInviteStatus('idle');
+      }, 1500);
+    } else {
+      setInviteStatus('error');
+    }
+    setInviteLoading(false);
   };
 
   return (
@@ -3515,7 +3529,7 @@ const TutorsList = () => {
               className="bg-surface-container-low w-full max-w-md rounded-[32px] p-8 border border-outline-variant/30 shadow-2xl"
               onClick={e => e.stopPropagation()}
             >
-              <h3 className="text-xl font-bold text-on-surface mb-6">Add Tutor</h3>
+              <h3 className="text-xl font-bold text-on-surface mb-6">Invite Tutor</h3>
               <form onSubmit={handleAdd} className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Full Name</label>
@@ -3527,14 +3541,20 @@ const TutorsList = () => {
                   <input required type="email" value={newTutor.email} onChange={e => setNewTutor(p => ({ ...p, email: e.target.value }))}
                     className="w-full px-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" placeholder="jane@tutoring.com" />
                 </div>
+                {inviteStatus === 'success' && (
+                  <p className="text-sm font-semibold text-green-600 bg-green-50 px-4 py-2 rounded-xl">Invite sent successfully!</p>
+                )}
+                {inviteStatus === 'error' && (
+                  <p className="text-sm font-semibold text-red-600 bg-red-50 px-4 py-2 rounded-xl">Failed to send invite. Check the service role key is configured.</p>
+                )}
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setShowModal(false)}
                     className="flex-1 py-3 rounded-2xl border border-outline-variant/30 text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-colors">
                     Cancel
                   </button>
-                  <button type="submit"
-                    className="flex-1 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm hover:opacity-90 transition-opacity">
-                    Add Tutor
+                  <button type="submit" disabled={inviteLoading}
+                    className="flex-1 py-3 rounded-2xl bg-primary text-on-primary font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50">
+                    {inviteLoading ? 'Sending Invite...' : 'Send Invite'}
                   </button>
                 </div>
               </form>
