@@ -1238,7 +1238,6 @@ const TutorSchedule = () => {
   const { sessions, students, courses, availability, setAvailability, addSession, updateSession, deleteSession, tutors, currentUserEmail } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [scheduleView, setScheduleView] = useState<'mine' | 'team'>('mine');
-  const [calendarMode, setCalendarMode] = useState<'book' | 'unavailable'>('book');
 
   // Booking/edit modal
   const [sessionModal, setSessionModal] = useState<'new' | 'edit' | null>(null);
@@ -1255,6 +1254,18 @@ const TutorSchedule = () => {
     location: '',
     date: '',
     time: '',
+    recurrence: 'none' as 'none' | 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly',
+    occurrences: 1,
+  });
+
+  // Block time modal
+  const [blockModal, setBlockModal] = useState(false);
+  const [blockData, setBlockData] = useState({
+    recurrence: 'weekly' as 'once' | 'weekly' | 'weekdays',
+    selectedDays: [1, 2, 3, 4, 5] as number[],
+    date: '',
+    startTime: '09:00',
+    endTime: '10:00',
   });
 
   const currentTutorName = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
@@ -1265,40 +1276,59 @@ const TutorSchedule = () => {
 
   // Filter sessions by My/Team view
   const visibleSessions = scheduleView === 'mine'
-    ? sessions.filter(s => !s.studentId || s.tutor === currentTutorName || !s.tutor)
+    ? sessions.filter(s => !s.tutor || s.tutor === currentTutorName || !currentTutorName)
     : sessions;
 
-  const toggleAvailability = (day: number, hour: number) => {
-    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-    const existing = availability.find(a => a.dayOfWeek === day && a.startTime === timeStr);
-    if (existing) {
-      setAvailability(availability.filter(a => a.id !== existing.id));
-    } else {
-      setAvailability([...availability, {
-        id: Math.random().toString(36).substr(2, 9),
-        dayOfWeek: day,
-        startTime: timeStr,
-        endTime: `${(hour + 1).toString().padStart(2, '0')}:00`,
-      }]);
-    }
+  const isUnavailable = (date: Date, hour: number): boolean => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const dayOfWeek = date.getDay();
+    return availability.some(a => {
+      const startH = parseInt(a.startTime.split(':')[0]);
+      const endH = parseInt(a.endTime.split(':')[0]);
+      if (hour < startH || hour >= endH) return false;
+      if (a.specificDate) return a.specificDate === dateStr;
+      if (a.dayOfWeek !== undefined) return a.dayOfWeek === dayOfWeek;
+      return false;
+    });
   };
 
-  const isUnavailable = (day: number, hour: number) => {
-    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-    return availability.some(a => a.dayOfWeek === day && a.startTime === timeStr);
+  const generateRecurringDates = (startDate: Date, recurrence: string, occurrences: number): Date[] => {
+    if (recurrence === 'none') return [startDate];
+    const dates: Date[] = [startDate];
+    if (recurrence === 'daily') {
+      for (let i = 1; i < occurrences; i++) dates.push(addDays(startDate, i));
+    } else if (recurrence === 'weekdays') {
+      let d = addDays(startDate, 1);
+      while (dates.length < occurrences) {
+        if (d.getDay() !== 0 && d.getDay() !== 6) dates.push(d);
+        d = addDays(d, 1);
+      }
+    } else if (recurrence === 'weekly') {
+      for (let i = 1; i < occurrences; i++) dates.push(addWeeks(startDate, i));
+    } else if (recurrence === 'biweekly') {
+      for (let i = 1; i < occurrences; i++) dates.push(addWeeks(startDate, i * 2));
+    } else if (recurrence === 'monthly') {
+      for (let i = 1; i < occurrences; i++) dates.push(addMonths(startDate, i));
+    }
+    return dates;
   };
 
   const getSessionAt = (date: Date, hour: number): Session | undefined => {
     return visibleSessions.find(s => {
       let sessionDate: Date | null = null;
-      const d = new Date(s.date);
-      if (!isNaN(d.getTime())) {
-        sessionDate = d;
+      // Try ISO format (yyyy-MM-dd) first
+      const isoMatch = s.date.match(/^\d{4}-\d{2}-\d{2}/);
+      if (isoMatch) {
+        const d = new Date(s.date + (s.date.length === 10 ? 'T12:00:00' : ''));
+        if (!isNaN(d.getTime())) sessionDate = d;
       } else {
+        // Parse "EEEE, MMM d" format e.g. "Monday, Apr 7"
         const parts = s.date.split(', ');
         const dateStr = parts.length > 1 ? parts[1] : s.date;
-        const d2 = new Date(`${dateStr}, ${new Date().getFullYear()}`);
-        if (!isNaN(d2.getTime())) sessionDate = d2;
+        try {
+          const parsed = parse(`${dateStr} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date());
+          if (!isNaN(parsed.getTime())) sessionDate = parsed;
+        } catch { /* ignore */ }
       }
       if (!sessionDate || !isSameDay(sessionDate, date)) return false;
       const [timePart, ampm] = s.time.split(' ');
@@ -1325,6 +1355,8 @@ const TutorSchedule = () => {
       location: '',
       date: format(date, 'yyyy-MM-dd'),
       time: timeStr,
+      recurrence: 'none',
+      occurrences: 1,
     });
     setSessionModal('new');
   };
@@ -1342,15 +1374,13 @@ const TutorSchedule = () => {
       modality: session.modality,
       location: session.location ?? '',
       date: (() => {
-        const d = new Date(session.date);
-        if (!isNaN(d.getTime())) return format(d, 'yyyy-MM-dd');
+        const isoMatch = session.date.match(/^\d{4}-\d{2}-\d{2}/);
+        if (isoMatch) return session.date.slice(0, 10);
         const parts = session.date.split(', ');
         const dateStr = parts.length > 1 ? parts[1] : session.date;
-        const d2 = new Date(`${dateStr}, ${new Date().getFullYear()}`);
-        return !isNaN(d2.getTime()) ? format(d2, 'yyyy-MM-dd') : '';
+        try { const p = parse(`${dateStr} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date()); return !isNaN(p.getTime()) ? format(p, 'yyyy-MM-dd') : ''; } catch { return ''; }
       })(),
       time: (() => {
-        // Convert "4:00 PM" to "16:00"
         const [timePart, ampm] = session.time.split(' ');
         if (!ampm) return session.time;
         const [hStr, mStr] = timePart.split(':');
@@ -1359,25 +1389,23 @@ const TutorSchedule = () => {
         if (ampm === 'AM' && h === 12) h = 0;
         return `${h.toString().padStart(2, '0')}:${mStr || '00'}`;
       })(),
+      recurrence: 'none',
+      occurrences: 1,
     });
   };
 
   const handleSlotClick = (date: Date, hour: number) => {
-    if (calendarMode === 'unavailable') {
-      toggleAvailability(date.getDay(), hour);
-      return;
-    }
     const session = getSessionAt(date, hour);
     if (session) {
       openEditSession(session);
-    } else if (!isUnavailable(date.getDay(), hour)) {
+    } else if (!isUnavailable(date, hour)) {
       openNewBooking(date, hour);
     }
   };
 
   const handleBookingSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const dateObj = bookingData.date ? new Date(bookingData.date + 'T12:00:00') : (selectedSlot?.date ?? new Date());
+    const startDate = bookingData.date ? new Date(bookingData.date + 'T12:00:00') : (selectedSlot?.date ?? new Date());
     const timeDisplay = (() => {
       const [h, m] = bookingData.time.split(':').map(Number);
       const ampm = h >= 12 ? 'PM' : 'AM';
@@ -1385,7 +1413,7 @@ const TutorSchedule = () => {
       return `${displayH}:${(m || 0).toString().padStart(2, '0')} ${ampm}`;
     })();
 
-    const sessionPayload = {
+    const makePayload = (dateObj: Date) => ({
       studentId: bookingData.studentId || undefined,
       courseId: bookingData.courseId || undefined,
       title: bookingData.title || (courses.find(c => c.id === bookingData.courseId)?.title ?? 'Tutoring Session'),
@@ -1398,16 +1426,34 @@ const TutorSchedule = () => {
       modality: bookingData.modality,
       location: bookingData.location || undefined,
       description: bookingData.description || undefined,
-    };
+    });
 
     if (sessionModal === 'edit' && editingSession) {
-      await updateSession(editingSession.id, sessionPayload);
+      await updateSession(editingSession.id, makePayload(startDate));
     } else {
-      await addSession(sessionPayload);
+      const dates = generateRecurringDates(startDate, bookingData.recurrence, bookingData.occurrences);
+      for (const d of dates) await addSession(makePayload(d));
     }
 
     setSessionModal(null);
     setEditingSession(null);
+  };
+
+  const handleBlockSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newBlocks: import('./types').Availability[] = [];
+    if (blockData.recurrence === 'once') {
+      if (blockData.date) {
+        newBlocks.push({ id: crypto.randomUUID(), specificDate: blockData.date, startTime: blockData.startTime, endTime: blockData.endTime });
+      }
+    } else {
+      const days = blockData.recurrence === 'weekdays' ? [1, 2, 3, 4, 5] : blockData.selectedDays;
+      days.forEach(day => {
+        newBlocks.push({ id: crypto.randomUUID(), dayOfWeek: day, startTime: blockData.startTime, endTime: blockData.endTime });
+      });
+    }
+    setAvailability([...availability, ...newBlocks]);
+    setBlockModal(false);
   };
 
   const handleDeleteSession = async () => {
@@ -1457,21 +1503,12 @@ const TutorSchedule = () => {
           ))}
         </div>
 
-        {/* Mode: Book / Mark Unavailable */}
-        <div className="flex items-center gap-1 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5">
-          <button
-            onClick={() => setCalendarMode('book')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${calendarMode === 'book' ? 'bg-secondary text-on-secondary shadow-md' : 'text-on-surface-variant hover:text-on-surface'}`}
-          >
-            <PlusCircle size={14} /> Book Session
-          </button>
-          <button
-            onClick={() => setCalendarMode('unavailable')}
-            className={`px-5 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${calendarMode === 'unavailable' ? 'bg-rose-500 text-white shadow-md' : 'text-on-surface-variant hover:text-on-surface'}`}
-          >
-            <X size={14} /> Block Time
-          </button>
-        </div>
+        <button
+          onClick={() => setBlockModal(true)}
+          className="px-5 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border border-rose-200"
+        >
+          <X size={14} /> Block Time
+        </button>
 
         <button
           onClick={() => setCurrentDate(new Date())}
@@ -1540,12 +1577,33 @@ const TutorSchedule = () => {
             </div>
           </div>
 
-          {/* Mode hint */}
-          <div className={`rounded-[32px] p-5 border text-sm font-semibold ${calendarMode === 'unavailable' ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-secondary/5 border-secondary/20 text-secondary'}`}>
-            {calendarMode === 'book'
-              ? '📅 Click any free slot to book a session. Click an existing session to edit it.'
-              : '🚫 Click time slots to toggle them as blocked. Click again to unblock.'}
+          <div className="bg-secondary/5 border border-secondary/20 rounded-[32px] p-5 text-sm font-semibold text-secondary">
+            Click any free slot to book a session. Click an existing session to edit it.
           </div>
+
+          {/* Active blocks list */}
+          {availability.length > 0 && (
+            <div className="bg-surface-container-low rounded-[32px] p-6 border border-outline-variant/30">
+              <p className="text-xs font-black text-on-surface-variant uppercase tracking-widest mb-3">Blocked Times</p>
+              <div className="space-y-2">
+                {availability.map(a => (
+                  <div key={a.id} className="flex items-center justify-between gap-2 bg-rose-50 rounded-xl px-3 py-2">
+                    <div>
+                      <p className="text-xs font-bold text-rose-700">
+                        {a.specificDate
+                          ? a.specificDate
+                          : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][a.dayOfWeek ?? 0] + ' (weekly)'}
+                      </p>
+                      <p className="text-[10px] text-rose-500">{a.startTime} – {a.endTime}</p>
+                    </div>
+                    <button onClick={() => setAvailability(availability.filter(x => x.id !== a.id))} className="text-rose-400 hover:text-rose-600 transition-colors flex-shrink-0">
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Weekly Grid */}
@@ -1572,34 +1630,34 @@ const TutorSchedule = () => {
                     {hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
                   </div>
                   {weekDays.map(day => {
-                    const unavailable = isUnavailable(day.getDay(), hour);
+                    const unavailable = isUnavailable(day, hour);
                     const session = getSessionAt(day, hour);
-                    const isBookMode = calendarMode === 'book';
-
+                    const showUnavailable = unavailable && scheduleView === 'mine';
                     return (
                       <div
                         key={`${day}-${hour}`}
                         onClick={() => handleSlotClick(day, hour)}
                         className={`relative border-r border-outline-variant/10 cursor-pointer transition-all ${
-                          unavailable
+                          showUnavailable
                             ? 'bg-rose-100 hover:bg-rose-200'
                             : session
                             ? ''
-                            : isBookMode
-                            ? 'hover:bg-primary/10 hover:border-primary/20'
-                            : 'hover:bg-rose-50'
+                            : 'hover:bg-primary/10 hover:border-primary/20'
                         }`}
                       >
                         {session && (
-                          <div className={`absolute inset-1 ${getSessionColor(session)} text-white rounded-xl p-2 shadow-lg z-10 overflow-hidden hover:opacity-90 transition-opacity`}>
+                          <div
+                            className={`absolute left-1 right-1 top-1 ${getSessionColor(session)} text-white rounded-xl p-2 shadow-lg z-20 overflow-hidden hover:opacity-90 transition-opacity`}
+                            style={{ height: `${Math.max((session.duration / 60) * 64 - 8, 20)}px` }}
+                          >
                             <p className="text-[10px] font-black truncate">{session.title}</p>
-                            <p className="text-[9px] opacity-80 truncate">{session.time}</p>
+                            <p className="text-[9px] opacity-80 truncate">{session.time} · {session.duration >= 60 ? `${session.duration / 60}h` : `${session.duration}m`}</p>
                             {scheduleView === 'team' && session.tutor && (
                               <p className="text-[9px] opacity-70 truncate">{session.tutor}</p>
                             )}
                           </div>
                         )}
-                        {unavailable && !session && (
+                        {showUnavailable && !session && (
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="w-full h-full opacity-30" style={{
                               backgroundImage: 'repeating-linear-gradient(45deg, #f43f5e 0, #f43f5e 1px, transparent 0, transparent 50%)',
@@ -1664,17 +1722,45 @@ const TutorSchedule = () => {
 
                 {/* Duration */}
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Duration (hours)</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[30, 60, 90, 120].map(d => (
-                      <button key={d} type="button"
-                        onClick={() => setBookingData(p => ({ ...p, duration: d }))}
-                        className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${bookingData.duration === d ? 'bg-primary/5 border-primary text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
-                        {d < 60 ? `${d}m` : `${d / 60}h`}
-                      </button>
-                    ))}
-                  </div>
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min={15}
+                    max={480}
+                    step={5}
+                    required
+                    value={bookingData.duration}
+                    onChange={e => setBookingData(p => ({ ...p, duration: parseInt(e.target.value) || 60 }))}
+                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                  />
                 </div>
+
+                {/* Recurrence */}
+                {sessionModal === 'new' && (
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Repeat</label>
+                      <select value={bookingData.recurrence}
+                        onChange={e => setBookingData(p => ({ ...p, recurrence: e.target.value as typeof bookingData.recurrence, occurrences: 1 }))}
+                        className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
+                        <option value="none">Does not repeat</option>
+                        <option value="daily">Every day</option>
+                        <option value="weekdays">Every weekday (Mon–Fri)</option>
+                        <option value="weekly">Every week</option>
+                        <option value="biweekly">Every 2 weeks</option>
+                        <option value="monthly">Every month</option>
+                      </select>
+                    </div>
+                    {bookingData.recurrence !== 'none' && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Number of occurrences</label>
+                        <input type="number" min={2} max={52} required value={bookingData.occurrences}
+                          onChange={e => setBookingData(p => ({ ...p, occurrences: parseInt(e.target.value) || 2 }))}
+                          className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Tutor */}
                 <div className="space-y-2">
@@ -1693,7 +1779,7 @@ const TutorSchedule = () => {
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Student</label>
                   <select value={bookingData.studentId}
-                    onChange={e => setBookingData(p => ({ ...p, studentId: e.target.value }))}
+                    onChange={e => setBookingData(p => ({ ...p, studentId: e.target.value, courseId: '' }))}
                     className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
                     <option value="">Select student (optional)</option>
                     {students.map(s => (
@@ -1702,17 +1788,23 @@ const TutorSchedule = () => {
                   </select>
                 </div>
 
-                {/* Course */}
+                {/* Course — filtered by enrolled student */}
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Course</label>
                   <select value={bookingData.courseId}
                     onChange={e => setBookingData(p => ({ ...p, courseId: e.target.value }))}
                     className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
                     <option value="">Select course (optional)</option>
-                    {courses.map(c => (
+                    {(bookingData.studentId
+                      ? courses.filter(c => students.find(s => s.id === bookingData.studentId)?.enrolledCourseIds.includes(c.id))
+                      : courses
+                    ).map(c => (
                       <option key={c.id} value={c.id}>{c.title}</option>
                     ))}
                   </select>
+                  {bookingData.studentId && courses.filter(c => students.find(s => s.id === bookingData.studentId)?.enrolledCourseIds.includes(c.id)).length === 0 && (
+                    <p className="text-[10px] text-amber-500 ml-1">This student is not enrolled in any courses.</p>
+                  )}
                 </div>
 
                 {/* Title */}
@@ -1770,6 +1862,101 @@ const TutorSchedule = () => {
                   <button type="submit"
                     className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all text-sm">
                     {sessionModal === 'edit' ? 'Save Changes' : 'Confirm Booking'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Block Time Modal */}
+      <AnimatePresence>
+        {blockModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setBlockModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
+            >
+              <div className="p-7 border-b border-outline-variant/20 bg-surface-container-high flex items-center justify-between">
+                <h3 className="text-xl font-black text-on-surface">Block Time</h3>
+                <button onClick={() => setBlockModal(false)} className="p-2 rounded-xl hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
+              </div>
+              <form onSubmit={handleBlockSubmit} className="p-7 space-y-5">
+                {/* Recurrence type */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Repeat</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { id: 'once', label: 'One time' },
+                      { id: 'weekly', label: 'Weekly' },
+                      { id: 'weekdays', label: 'Weekdays' },
+                    ] as const).map(opt => (
+                      <button key={opt.id} type="button"
+                        onClick={() => setBlockData(p => ({ ...p, recurrence: opt.id, selectedDays: opt.id === 'weekdays' ? [1,2,3,4,5] : p.selectedDays }))}
+                        className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${blockData.recurrence === opt.id ? 'bg-rose-500/10 border-rose-500 text-rose-600' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Day picker for weekly */}
+                {blockData.recurrence === 'weekly' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Days</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
+                        <button key={i} type="button"
+                          onClick={() => setBlockData(p => ({
+                            ...p,
+                            selectedDays: p.selectedDays.includes(i)
+                              ? p.selectedDays.filter(x => x !== i)
+                              : [...p.selectedDays, i],
+                          }))}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${blockData.selectedDays.includes(i) ? 'bg-rose-500/10 border-rose-500 text-rose-600' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Specific date for one-time */}
+                {blockData.recurrence === 'once' && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Date</label>
+                    <input type="date" required value={blockData.date}
+                      onChange={e => setBlockData(p => ({ ...p, date: e.target.value }))}
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-sm" />
+                  </div>
+                )}
+
+                {/* Time range */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Start Time</label>
+                    <input type="time" required value={blockData.startTime}
+                      onChange={e => setBlockData(p => ({ ...p, startTime: e.target.value }))}
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-sm" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">End Time</label>
+                    <input type="time" required value={blockData.endTime}
+                      onChange={e => setBlockData(p => ({ ...p, endTime: e.target.value }))}
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-sm" />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => setBlockModal(false)}
+                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all text-sm">
+                    Cancel
+                  </button>
+                  <button type="submit"
+                    className="flex-1 py-4 bg-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-rose-500/20 hover:shadow-rose-500/40 transition-all text-sm">
+                    Block Time
                   </button>
                 </div>
               </form>
@@ -2190,10 +2377,19 @@ const TutorDashboard = () => {
   const currentTutorName = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
 
   const parseSessionDate = (dateStr: string): Date | null => {
-    const d = new Date(dateStr);
-    if (!isNaN(d.getTime())) return d;
-    const d2 = new Date(`${dateStr}, ${new Date().getFullYear()}`);
-    if (!isNaN(d2.getTime())) return d2;
+    // Try ISO format first (yyyy-MM-dd)
+    const isoMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) {
+      const d = new Date(dateStr.length === 10 ? dateStr + 'T12:00:00' : dateStr);
+      if (!isNaN(d.getTime())) return d;
+    }
+    // Parse "EEEE, MMM d" e.g. "Friday, Apr 10"
+    const parts = dateStr.split(', ');
+    const datePart = parts.length > 1 ? parts[1] : parts[0];
+    try {
+      const d = parse(`${datePart} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date());
+      if (!isNaN(d.getTime())) return d;
+    } catch { /* ignore */ }
     return null;
   };
 
@@ -3860,12 +4056,16 @@ export default function App() {
     setCurrentUserEmail(session?.user.email ?? null);
   };
 
-  const handleInviteDone = () => {
+  const handleInviteDone = async () => {
     setIsInvite(false);
-    // Clear the hash from the URL
     window.history.replaceState(null, '', window.location.pathname);
+    const session = await supabaseService.getSession();
+    if (session) {
+      const profile = await supabaseService.getProfile(session.user.id);
+      setUserRole(profile?.role ?? 'student');
+      setCurrentUserEmail(session.user.email ?? null);
+    }
     setIsAuthenticated(true);
-    setUserRole('student');
   };
 
   const handleLogout = async () => {

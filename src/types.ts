@@ -57,7 +57,8 @@ export interface Student {
 
 export interface Availability {
   id: string;
-  dayOfWeek: number; // 0-6 (Sunday-Saturday)
+  dayOfWeek?: number; // 0-6 (Sunday-Saturday) for recurring blocks
+  specificDate?: string; // 'yyyy-MM-dd' for one-time blocks
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
 }

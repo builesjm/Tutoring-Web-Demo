@@ -52,7 +52,12 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [tutors, setTutors] = useState<Tutor[]>([]);
   const [earnings, setEarnings] = useState<Earning[]>([]);
   const [contentPosts, setContentPosts] = useState<ContentPost[]>([]);
-  const [availability, setAvailabilityState] = useState<Availability[]>([]);
+  const [availability, setAvailabilityState] = useState<Availability[]>(() => {
+    try {
+      const saved = localStorage.getItem('tutor_availability');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
@@ -296,7 +301,10 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       addFeedback,
       deleteFeedback,
       availability,
-      setAvailability: setAvailabilityState,
+      setAvailability: (a: Availability[]) => {
+        setAvailabilityState(a);
+        try { localStorage.setItem('tutor_availability', JSON.stringify(a)); } catch {}
+      },
       addTutor,
       deleteTutor,
       earnings,
