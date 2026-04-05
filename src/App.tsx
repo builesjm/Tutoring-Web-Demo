@@ -3692,10 +3692,7 @@ const TutorsList = () => {
                 filtered.map(tutor => (
                   <tr key={tutor.id} className="border-b border-outline-variant/10 hover:bg-surface-container-high/50 transition-colors">
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${tutor.name}`} alt="" className="w-9 h-9 rounded-full bg-primary-container" />
-                        <span className="font-semibold text-on-surface">{tutor.name}</span>
-                      </div>
+                      <span className="font-semibold text-on-surface">{tutor.name}</span>
                     </td>
                     <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.email}</td>
                     <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.lastActivity ?? '—'}</td>
