@@ -52,6 +52,7 @@ export interface Student {
   name: string;
   email: string;
   enrolledCourseIds: string[];
+  assignedTutorIds?: string[];
   lastActivity: string;
 }
 

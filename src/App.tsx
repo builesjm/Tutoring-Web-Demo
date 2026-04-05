@@ -290,7 +290,7 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
             </button>
             <div>
               <h3 className="text-2xl font-black text-on-surface">{course.title}</h3>
-              <p className="text-sm text-on-surface-variant font-medium">{course.level} • Academic Course</p>
+              <p className="text-sm text-on-surface-variant font-medium">{getLevelLabel(course.level)} • Academic Course</p>
             </div>
           </div>
           <button 
@@ -402,32 +402,35 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
 };
 
 const Dashboard = () => {
-  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
-  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
-  const { courses, students, currentUserEmail, contentPosts } = useData();
+  const navigate = useNavigate();
+  const { courses, sessions, students, currentUserEmail } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
   const enrolledCourses = currentStudent
     ? courses.filter(c => currentStudent.enrolledCourseIds.includes(c.id))
     : [];
 
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+  const weekEnd = addDays(weekStart, 6);
+  const thisWeekSessions = sessions
+    .filter(s => {
+      if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
+      try {
+        const d = new Date(s.date);
+        return isWithinInterval(d, { start: weekStart, end: weekEnd });
+      } catch { return false; }
+    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       className="max-w-7xl mx-auto"
     >
       <Header title="Dashboard" subtitle={currentStudent ? `Welcome back, ${currentStudent.name}! Ready to learn today?` : 'Welcome back! Ready to learn today?'} />
-
-      <AnimatePresence>
-        {selectedCourse && (
-          <CourseModal 
-            course={selectedCourse} 
-            onClose={() => setSelectedCourse(null)} 
-          />
-        )}
-      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Main Column: Current Courses */}
@@ -439,170 +442,77 @@ const Dashboard = () => {
               </h4>
               <Link to="/courses" className="text-sm font-bold text-primary hover:underline bg-primary/5 px-4 py-2 rounded-full">View All Courses</Link>
             </div>
-            
-            <div className="space-y-6">
+
+            <div className="space-y-4">
               {enrolledCourses.length === 0 && (
                 <p className="text-on-surface-variant text-sm py-4">No courses assigned yet. Your tutor will add courses for you.</p>
               )}
-              {enrolledCourses.slice(0, 3).map((course) => {
-                const isExpanded = expandedCourseId === course.id;
-                const currentStudentId = currentStudent?.id;
-                const coursePosts = contentPosts.filter(cp =>
-                  cp.courseId === course.id &&
-                  cp.studentId === currentStudentId &&
-                  cp.status === 'published'
-                );
-
-                return (
-                  <div 
-                    key={course.id} 
-                    className={`bg-surface-container-lowest rounded-[32px] border transition-all duration-300 overflow-hidden ${
-                      isExpanded ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-outline-variant/20 hover:border-primary/30'
-                    }`}
-                  >
-                    <div className="p-6 flex flex-col md:flex-row md:items-center gap-6">
-                      <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                        <BookOpen size={32} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/30 px-2 py-0.5 rounded-md">
-                            {course.level}
-                          </span>
-                        </div>
-                        <h5 className="text-xl font-bold text-on-surface truncate">{course.title}</h5>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
-                          className={`p-3 rounded-2xl transition-all ${
-                            isExpanded ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface-variant hover:text-primary'
-                          }`}
-                        >
-                          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                        </button>
-                        <button 
-                          onClick={() => setSelectedCourse(course)}
-                          className="px-6 py-3 bg-primary text-on-primary text-sm font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all"
-                        >
-                          Open Course
-                        </button>
-                      </div>
-                    </div>
-
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div 
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="border-t border-outline-variant/20 bg-surface-container-low/50"
-                        >
-                          <div className="p-8 space-y-5">
-                            {coursePosts.length === 0 ? (
-                              <p className="text-sm text-on-surface-variant italic">No content published for this course yet.</p>
-                            ) : coursePosts.map(post => (
-                              <div key={post.id} className="bg-surface-container-lowest rounded-[28px] border border-outline-variant/10 shadow-sm p-6 space-y-4">
-                                <div>
-                                  <h6 className="text-base font-black text-on-surface">{post.title}</h6>
-                                  {post.description && (
-                                    <p className="text-sm text-on-surface-variant leading-relaxed mt-1">{post.description}</p>
-                                  )}
-                                </div>
-                                {post.items.map((item, i) => (
-                                  <div key={i}>
-                                    {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
-                                      <iframe
-                                        src={toYouTubeEmbed(item.url!)!}
-                                        className="w-full rounded-2xl border border-outline-variant/20"
-                                        height="220"
-                                        allowFullScreen
-                                      />
-                                    )}
-                                    {item.type === 'file' && (
-                                      <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/15">
-                                        {fileIconForType(item.fileType ?? '')}
-                                        <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
-                                      </div>
-                                    )}
-                                    {item.type === 'link' && (
-                                      <a
-                                        href={item.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors"
-                                      >
-                                        <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
-                                        <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
-                                      </a>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+              {enrolledCourses.slice(0, 3).map((course) => (
+                <button
+                  key={course.id}
+                  onClick={() => navigate(`/courses/${course.id}`)}
+                  className="w-full text-left bg-surface-container-lowest rounded-[28px] border border-outline-variant/20 hover:border-primary/40 hover:shadow-lg transition-all duration-200 p-5 flex items-center gap-5 group"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-on-primary transition-all duration-200">
+                    <BookOpen size={26} />
                   </div>
-                );
-              })}
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/30 px-2 py-0.5 rounded-md">
+                      {getLevelLabel(course.level)}
+                    </span>
+                    <h5 className="text-lg font-bold text-on-surface truncate mt-1 group-hover:text-primary transition-colors">{course.title}</h5>
+                  </div>
+                  <ChevronRight size={20} className="text-outline-variant group-hover:text-primary transition-colors flex-shrink-0" />
+                </button>
+              ))}
             </div>
           </section>
         </div>
 
-        {/* Side Column: Schedule */}
+        {/* Side Column: This Week's Schedule */}
         <div className="lg:col-span-4">
           <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 sticky top-8">
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center justify-between mb-6">
               <h4 className="text-xl font-black text-on-surface flex items-center gap-3">
-                <Calendar size={24} className="text-primary" /> Schedule
+                <Calendar size={24} className="text-primary" /> This Week
               </h4>
-              <Link to="/schedule" className="text-xs font-bold text-primary hover:underline">Full View</Link>
+              <Link to="/schedule" className="text-xs font-bold text-primary hover:underline">Full Schedule</Link>
             </div>
-            
-            <div className="bg-surface-container-lowest rounded-3xl p-6 border border-outline-variant/20 mb-8">
-              <div className="grid grid-cols-7 gap-1 text-center mb-4">
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                  <span key={`dash-cal-${d}-${i}`} className="text-[10px] font-black text-on-surface-variant">{d}</span>
-                ))}
+
+            <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-4">
+              {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
+            </p>
+
+            {thisWeekSessions.length === 0 ? (
+              <div className="text-center py-10">
+                <Calendar size={32} className="mx-auto mb-3 text-outline-variant opacity-40" />
+                <p className="text-sm text-on-surface-variant italic">No sessions scheduled this week.</p>
               </div>
-              <div className="grid grid-cols-7 gap-1 text-center">
-                {Array.from({ length: 31 }).map((_, i) => {
-                  const day = i + 1;
-                  const isToday = day === 24;
-                  const hasSession = [21, 24, 26, 28].includes(day);
+            ) : (
+              <div className="space-y-3">
+                {thisWeekSessions.map(session => {
+                  const sessionDate = new Date(session.date);
+                  const todayFlag = isToday(sessionDate);
                   return (
-                    <div 
-                      key={i} 
-                      className={`aspect-square rounded-xl text-[10px] font-black flex flex-col items-center justify-center relative transition-all ${
-                        isToday ? 'bg-primary text-on-primary shadow-lg shadow-primary/20' : 'text-on-surface hover:bg-surface-container-high'
-                      }`}
-                    >
-                      {day}
-                      {hasSession && !isToday && <span className="absolute bottom-1.5 w-1 h-1 bg-primary rounded-full"></span>}
+                    <div key={session.id} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+                      todayFlag ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-lowest border-outline-variant/20'
+                    }`}>
+                      <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
+                        todayFlag ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface'
+                      }`}>
+                        <span className="text-[9px] font-black leading-none uppercase">{format(sessionDate, 'EEE')}</span>
+                        <span className="text-lg font-black leading-none">{format(sessionDate, 'd')}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-on-surface truncate">{session.title}</p>
+                        <p className="text-xs text-on-surface-variant">{session.time} · {session.tutor}</p>
+                      </div>
+                      {todayFlag && <span className="text-[9px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-1 rounded-full">Today</span>}
                     </div>
                   );
                 })}
               </div>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-xs font-black text-on-surface-variant uppercase tracking-widest mb-2">Today's Sessions</p>
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-primary/5 border border-primary/10">
-                <div className="w-12 h-12 rounded-xl bg-primary text-on-primary flex flex-col items-center justify-center">
-                  <span className="text-[10px] font-black leading-none">OCT</span>
-                  <span className="text-lg font-black leading-none">24</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-on-surface truncate">Organic Chemistry</p>
-                  <p className="text-xs text-on-surface-variant">14:00 • Dr. Thorne</p>
-                </div>
-              </div>
-              <button className="w-full py-4 bg-surface-container-high text-on-surface text-sm font-bold rounded-2xl hover:bg-surface-container-highest transition-all">
-                View Full Schedule
-              </button>
-            </div>
+            )}
           </section>
         </div>
       </div>
@@ -612,17 +522,12 @@ const Dashboard = () => {
 
 const Courses = () => {
   const [activeTab, setActiveTab] = React.useState<'All' | 'Elementary' | 'High School' | 'Uni'>('All');
-  const [expandedCourseId, setExpandedCourseId] = React.useState<string | null>(null);
   const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = React.useState('');
-  const { courses, role, students, currentUserEmail, contentPosts } = useData();
+  const [selectedCourse, setSelectedCourse] = React.useState<import('./types').Course | null>(null);
+  const { courses } = useData();
 
-  const currentStudent = students.find(s => s.email === currentUserEmail);
-  const enrolledCourses = currentStudent
-    ? courses.filter(c => currentStudent.enrolledCourseIds.includes(c.id))
-    : [];
-
-  const filteredCourses = enrolledCourses.filter(course => {
+  const filteredCourses = courses.filter(course => {
     const matchesTab = activeTab === 'All' || course.level === activeTab;
     const matchesSearch = course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           course.description.toLowerCase().includes(searchQuery.toLowerCase());
@@ -692,198 +597,43 @@ const Courses = () => {
       {/* Course Grid/List */}
       <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
         {filteredCourses.length > 0 ? filteredCourses.map((course) => {
-          const isExpanded = expandedCourseId === course.id;
-          const courseTutor = course.tutor || 'Expert Tutor';
-
           if (viewMode === 'list') {
-            const coursePosts = contentPosts.filter(cp =>
-              cp.courseId === course.id &&
-              cp.studentId === currentStudent?.id &&
-              cp.status === 'published'
-            );
             return (
-              <motion.div
-                layout
-                key={course.id}
-                onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
-                className={`group bg-surface-container-lowest rounded-3xl border transition-all duration-300 cursor-pointer overflow-hidden ${
-                  isExpanded ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-outline-variant/30 hover:shadow-md hover:border-primary/20'
-                }`}
+              <motion.div layout key={course.id}
+                onClick={() => setSelectedCourse(course)}
+                className="group bg-surface-container-lowest rounded-3xl border border-outline-variant/30 hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer p-4 flex items-center gap-4"
               >
-                <div className="p-4 flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-primary-container text-primary flex items-center justify-center flex-shrink-0">
-                    <BookOpen size={24} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-0.5">
-                      <h3 className="text-base font-black text-on-surface truncate group-hover:text-primary transition-colors">{course.title}</h3>
-                      <span className="text-[8px] font-black uppercase tracking-widest text-secondary bg-secondary-container/50 px-2 py-0.5 rounded-full">
-                        {course.level}
-                      </span>
-                    </div>
-                    <p className="text-xs text-on-surface-variant truncate">{course.description}</p>
-                  </div>
-                  <div className="hidden sm:flex flex-col items-end mr-4">
-                    <span className="text-[8px] font-black text-on-surface-variant uppercase tracking-wider">Tutor</span>
-                    <span className="text-xs font-bold text-on-surface">{courseTutor}</span>
-                  </div>
-                  <div className={`p-2 rounded-full transition-all ${isExpanded ? 'bg-primary text-on-primary rotate-180' : 'bg-primary/5 text-primary'}`}>
-                    <ChevronDown size={18} />
-                  </div>
+                <div className="w-12 h-12 rounded-xl bg-primary-container text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-on-primary transition-all">
+                  <BookOpen size={24} />
                 </div>
-
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="border-t border-outline-variant/20 bg-surface-container-low/30"
-                    >
-                      <div className="p-6 space-y-4">
-                        {course.description && (
-                          <p className="text-sm text-on-surface-variant leading-relaxed">{course.description}</p>
-                        )}
-                        {coursePosts.length === 0 ? (
-                          <p className="text-sm text-on-surface-variant italic">No content published yet.</p>
-                        ) : coursePosts.map(post => (
-                          <div key={post.id} className="bg-surface-container-lowest rounded-2xl border border-outline-variant/10 p-5 space-y-3">
-                            <div>
-                              <h6 className="text-sm font-black text-on-surface">{post.title}</h6>
-                              {post.description && <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{post.description}</p>}
-                            </div>
-                            {post.items.map((item, i) => (
-                              <div key={i}>
-                                {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
-                                  <iframe src={toYouTubeEmbed(item.url!)!} className="w-full rounded-xl border border-outline-variant/20" height="180" allowFullScreen />
-                                )}
-                                {item.type === 'file' && (
-                                  <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-container-low rounded-xl border border-outline-variant/15">
-                                    {fileIconForType(item.fileType ?? '')}
-                                    <span className="text-xs font-medium text-on-surface truncate">{item.fileName}</span>
-                                  </div>
-                                )}
-                                {item.type === 'link' && (
-                                  <a href={item.url} target="_blank" rel="noopener noreferrer"
-                                    className="flex items-center gap-2 px-3 py-2.5 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors"
-                                    onClick={e => e.stopPropagation()}>
-                                    <ExternalLink size={13} className="text-tertiary flex-shrink-0" />
-                                    <span className="text-xs text-tertiary font-medium truncate">{item.label ?? item.url}</span>
-                                  </a>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-0.5">
+                    <h3 className="text-base font-black text-on-surface truncate group-hover:text-primary transition-colors">{course.title}</h3>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-secondary bg-secondary-container/50 px-2 py-0.5 rounded-full">{getLevelLabel(course.level)}</span>
+                  </div>
+                  <p className="text-xs text-on-surface-variant truncate">{course.description}</p>
+                </div>
+                <ChevronRight size={18} className="text-outline-variant group-hover:text-primary transition-colors flex-shrink-0" />
               </motion.div>
             );
           }
 
-          const coursePosts = contentPosts.filter(cp =>
-            cp.courseId === course.id &&
-            cp.studentId === currentStudent?.id &&
-            cp.status === 'published'
-          );
           return (
-            <motion.div
-              layout
-              key={course.id}
-              onClick={() => setExpandedCourseId(isExpanded ? null : course.id)}
-              className={`group bg-surface-container-lowest rounded-[32px] border transition-all duration-300 cursor-pointer flex flex-col overflow-hidden ${
-                isExpanded ? 'border-primary ring-1 ring-primary/20 shadow-xl' : 'border-outline-variant/30 hover:shadow-lg hover:border-primary/20'
-              }`}
+            <motion.div layout key={course.id}
+              onClick={() => setSelectedCourse(course)}
+              className="group bg-surface-container-lowest rounded-[32px] border border-outline-variant/30 hover:shadow-lg hover:border-primary/30 transition-all duration-200 cursor-pointer flex flex-col p-6"
             >
-              <div className="p-6">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="w-14 h-14 rounded-2xl bg-primary-container text-primary flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                    <BookOpen size={28} />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/50 px-3 py-1 rounded-full">
-                    {course.level}
-                  </span>
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-14 h-14 rounded-2xl bg-primary-container text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-all duration-200">
+                  <BookOpen size={28} />
                 </div>
-                
-                <h3 className="text-xl font-black text-on-surface mb-2 group-hover:text-primary transition-colors">{course.title}</h3>
-                
-                <AnimatePresence>
-                  {!isExpanded && (
-                    <motion.p 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-sm text-on-surface-variant leading-relaxed line-clamp-2"
-                    >
-                      {course.description}
-                    </motion.p>
-                  )}
-                </AnimatePresence>
-
-                <div className="mt-6 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
-                      <User size={16} />
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-wider">Available Tutor</span>
-                      <span className="text-xs font-bold text-on-surface">{courseTutor}</span>
-                    </div>
-                  </div>
-                  <div className={`p-2 rounded-full transition-all ${isExpanded ? 'bg-primary text-on-primary rotate-180' : 'bg-primary/5 text-primary'}`}>
-                    <ChevronDown size={20} />
-                  </div>
-                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/50 px-3 py-1 rounded-full">{getLevelLabel(course.level)}</span>
               </div>
-
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="border-t border-outline-variant/20 bg-surface-container-low/30"
-                  >
-                    <div className="p-6 space-y-4">
-                      {course.description && (
-                        <p className="text-sm text-on-surface-variant leading-relaxed">{course.description}</p>
-                      )}
-                      {coursePosts.length === 0 ? (
-                        <p className="text-sm text-on-surface-variant italic">No content published yet.</p>
-                      ) : coursePosts.map(post => (
-                        <div key={post.id} className="bg-surface-container-low rounded-2xl border border-outline-variant/10 p-4 space-y-3">
-                          <div>
-                            <h6 className="text-sm font-black text-on-surface">{post.title}</h6>
-                            {post.description && <p className="text-xs text-on-surface-variant mt-0.5 leading-relaxed">{post.description}</p>}
-                          </div>
-                          {post.items.map((item, i) => (
-                            <div key={i}>
-                              {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
-                                <iframe src={toYouTubeEmbed(item.url!)!} className="w-full rounded-xl border border-outline-variant/20" height="160" allowFullScreen />
-                              )}
-                              {item.type === 'file' && (
-                                <div className="flex items-center gap-3 px-3 py-2.5 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
-                                  {fileIconForType(item.fileType ?? '')}
-                                  <span className="text-xs font-medium text-on-surface truncate">{item.fileName}</span>
-                                </div>
-                              )}
-                              {item.type === 'link' && (
-                                <a href={item.url} target="_blank" rel="noopener noreferrer"
-                                  className="flex items-center gap-2 px-3 py-2.5 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors"
-                                  onClick={e => e.stopPropagation()}>
-                                  <ExternalLink size={13} className="text-tertiary flex-shrink-0" />
-                                  <span className="text-xs text-tertiary font-medium truncate">{item.label ?? item.url}</span>
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <h3 className="text-xl font-black text-on-surface mb-2 group-hover:text-primary transition-colors">{course.title}</h3>
+              <p className="text-sm text-on-surface-variant leading-relaxed line-clamp-2 flex-1">{course.description}</p>
+              <div className="mt-6 flex items-center justify-end">
+                <ChevronRight size={20} className="text-outline-variant group-hover:text-primary transition-colors" />
+              </div>
             </motion.div>
           );
         }) : (
@@ -896,6 +646,189 @@ const Courses = () => {
           </div>
         )}
       </div>
+
+      {/* Course description modal */}
+      <AnimatePresence>
+        {selectedCourse && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setSelectedCourse(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-surface rounded-[32px] border border-outline-variant/30 shadow-2xl max-w-lg w-full p-8"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <BookOpen size={28} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/30 px-2 py-0.5 rounded-md">{getLevelLabel(selectedCourse.level)}</span>
+                    <h2 className="text-xl font-black text-on-surface mt-1">{selectedCourse.title}</h2>
+                  </div>
+                </div>
+                <button onClick={() => setSelectedCourse(null)} className="text-on-surface-variant hover:text-on-surface transition-colors p-1">
+                  <X size={22} />
+                </button>
+              </div>
+              <p className="text-sm text-on-surface-variant leading-relaxed">{selectedCourse.description || 'No description available.'}</p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+};
+
+const StudentCoursePage = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { courses, students, currentUserEmail, contentPosts, sessions, feedback, resources } = useData();
+
+  const course = courses.find(c => c.id === id);
+  const currentStudent = students.find(s => s.email === currentUserEmail);
+
+  if (!course) return <Navigate to="/courses" replace />;
+
+  const coursePosts = contentPosts.filter(cp =>
+    cp.courseId === course.id &&
+    cp.studentId === currentStudent?.id &&
+    cp.status === 'published'
+  );
+  const courseSessions = sessions.filter(s => s.courseId === course.id);
+  const courseResources = resources.filter(r => r.courseId === course.id);
+  const courseFeedback = feedback.filter(f => f.courseId === course.id);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-4xl mx-auto">
+      <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-6 font-semibold">
+        <ChevronLeft size={18} /> Back to Dashboard
+      </button>
+
+      {/* Content posts */}
+      <section className="mb-8">
+        <h2 className="text-lg font-black text-on-surface mb-4">Course Content</h2>
+        {coursePosts.length === 0 ? (
+          <div className="bg-surface-container-low rounded-3xl border border-outline-variant/30 p-8 text-center">
+            <BookOpen size={36} className="mx-auto mb-3 text-outline-variant opacity-40" />
+            <p className="text-sm text-on-surface-variant italic">No content published for this course yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {coursePosts.map(post => (
+              <div key={post.id} className="bg-surface-container-low rounded-[28px] border border-outline-variant/20 p-6 space-y-4">
+                <div>
+                  <h3 className="text-base font-black text-on-surface">{post.title}</h3>
+                  {post.description && <p className="text-sm text-on-surface-variant leading-relaxed mt-1">{post.description}</p>}
+                </div>
+                {post.items.map((item, i) => (
+                  <div key={i}>
+                    {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                      <iframe src={toYouTubeEmbed(item.url!)!} className="w-full rounded-2xl border border-outline-variant/20" height="240" allowFullScreen />
+                    )}
+                    {item.type === 'file' && (
+                      <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
+                        {fileIconForType(item.fileType ?? '')}
+                        <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
+                      </div>
+                    )}
+                    {item.type === 'link' && (
+                      <a href={item.url} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors">
+                        <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
+                        <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Sessions */}
+        <section>
+          <h2 className="text-lg font-black text-on-surface mb-4 flex items-center gap-2">
+            <Video size={20} className="text-primary" /> Sessions
+          </h2>
+          {courseSessions.length === 0 ? (
+            <p className="text-sm text-on-surface-variant italic">No sessions recorded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {courseSessions.map(session => (
+                <div key={session.id} className="bg-surface-container-low rounded-2xl border border-outline-variant/20 p-4 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <Calendar size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-on-surface truncate">{session.title}</p>
+                    <p className="text-[11px] text-on-surface-variant">{session.date} · {session.duration}m</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Resources */}
+        <section>
+          <h2 className="text-lg font-black text-on-surface mb-4 flex items-center gap-2">
+            <FileText size={20} className="text-primary" /> Resources
+          </h2>
+          {courseResources.length === 0 ? (
+            <p className="text-sm text-on-surface-variant italic">No resources uploaded yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {courseResources.map(res => (
+                <div key={res.id} className="flex items-center gap-3 p-4 bg-surface-container-low rounded-2xl border border-outline-variant/20">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <FileText size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-on-surface truncate">{res.title}</p>
+                    <p className="text-[11px] text-on-surface-variant uppercase tracking-wider font-bold">{res.type} · {res.size || res.duration || `${res.itemsCount} items`}</p>
+                  </div>
+                  <ArrowUpRight size={16} className="text-outline-variant flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+
+      {/* Feedback */}
+      {courseFeedback.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-lg font-black text-on-surface mb-4 flex items-center gap-2">
+            <MessageSquare size={20} className="text-primary" /> Tutor Feedback
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {courseFeedback.map(item => (
+              <div key={item.id} className="p-5 bg-tertiary-container/30 rounded-3xl border border-tertiary/10">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
+                      <User size={16} />
+                    </div>
+                    <span className="text-xs font-bold text-tertiary">{item.tutor}</span>
+                  </div>
+                  <span className="text-[10px] text-tertiary/60 font-medium">{item.date}</span>
+                </div>
+                <p className="text-sm text-tertiary/80 italic leading-relaxed">"{item.text}"</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </motion.div>
   );
 };
@@ -1970,169 +1903,202 @@ const TutorSchedule = () => {
 
 
 const Schedule = () => {
-  const { sessions, role, courses } = useData();
+  const { sessions, students, currentUserEmail } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<Date>(new Date());
 
-  const activeCourseIds = courses.slice(0, 3).map(c => c.id);
-  const activeSessions = sessions.filter(s => s.courseId && activeCourseIds.includes(s.courseId));
+  const currentStudent = students.find(s => s.email === currentUserEmail);
+
+  // Filter sessions relevant to this student
+  const studentSessions = sessions.filter(s =>
+    !s.studentId || !currentStudent || s.studentId === currentStudent.id
+  );
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
+  const leadingBlanks = monthStart.getDay(); // 0=Sun … 6=Sat
+
+  const selectedDaySessions = studentSessions.filter(s => {
+    try { return isSameDay(new Date(s.date), selectedDay); } catch { return false; }
+  });
+
+  const upcomingSessions = studentSessions
+    .filter(s => s.status === 'upcoming')
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const displaySessions = selectedDaySessions.length > 0 ? selectedDaySessions : upcomingSessions;
+  const displayLabel = selectedDaySessions.length > 0
+    ? format(selectedDay, 'EEEE, MMMM d')
+    : 'Upcoming Sessions';
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.98 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.98 }}
       className="max-w-7xl mx-auto"
     >
       <Header title="Schedule" />
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Calendar Sidebar */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 shadow-sm">
-            <div className="flex items-center justify-between mb-8">
-              <h4 className="text-xl font-black text-on-surface">{format(currentDate, 'MMMM yyyy')}</h4>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-                  className="p-2 rounded-xl hover:bg-surface-container-high text-on-surface-variant transition-colors"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <button 
-                  onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-                  className="p-2 rounded-xl hover:bg-surface-container-high text-on-surface-variant transition-colors"
-                >
-                  <ChevronRight size={20} />
-                </button>
-              </div>
+        {/* Calendar */}
+        <div className="lg:col-span-1">
+          <div className="bg-surface-container-low rounded-[40px] p-7 border border-outline-variant/30 shadow-sm">
+            {/* Month nav */}
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={() => setCurrentDate(subMonths(currentDate, 1))}
+                className="p-2 rounded-xl hover:bg-surface-container-high text-on-surface-variant transition-colors"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <h4 className="text-base font-black text-on-surface">{format(currentDate, 'MMMM yyyy')}</h4>
+              <button
+                onClick={() => setCurrentDate(addMonths(currentDate, 1))}
+                className="p-2 rounded-xl hover:bg-surface-container-high text-on-surface-variant transition-colors"
+              >
+                <ChevronRight size={20} />
+              </button>
             </div>
 
-            <div className="grid grid-cols-7 gap-2 text-center mb-6">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <span key={`sched-cal-${d}-${i}`} className="text-xs font-black text-on-surface-variant/50 uppercase tracking-widest">{d}</span>
+            {/* Day-of-week headers */}
+            <div className="grid grid-cols-7 mb-2">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
+                <span key={d} className="text-center text-[10px] font-black text-on-surface-variant/50 uppercase tracking-widest pb-2">{d}</span>
               ))}
             </div>
-            
-            <div className="grid grid-cols-7 gap-2 text-center">
-              {calendarDays.map((day, i) => {
-                const isSelected = isSameDay(day, currentDate);
-                const hasSession = sessions.some(s => isSameDay(new Date(s.date), day));
-                
+
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-y-1">
+              {/* Leading blanks */}
+              {Array.from({ length: leadingBlanks }).map((_, i) => (
+                <div key={`blank-${i}`} />
+              ))}
+
+              {calendarDays.map((day) => {
+                const todayFlag = isToday(day);
+                const isSelected = isSameDay(day, selectedDay);
+                const hasSession = studentSessions.some(s => {
+                  try { return isSameDay(new Date(s.date), day); } catch { return false; }
+                });
+
                 return (
-                  <button 
-                    key={i} 
-                    onClick={() => setCurrentDate(day)}
-                    className={`aspect-square rounded-2xl text-sm font-black flex flex-col items-center justify-center relative transition-all ${
-                      isSelected ? 'bg-primary text-on-primary shadow-xl scale-110 z-10' : 'hover:bg-surface-container-high text-on-surface'
+                  <button
+                    key={day.toISOString()}
+                    onClick={() => setSelectedDay(day)}
+                    className={`relative flex flex-col items-center justify-center aspect-square rounded-full text-sm font-bold transition-all mx-auto w-9 h-9 ${
+                      isSelected
+                        ? 'bg-primary text-on-primary shadow-md'
+                        : todayFlag
+                        ? 'bg-primary/15 text-primary font-black'
+                        : 'text-on-surface hover:bg-surface-container-high'
                     }`}
                   >
                     {format(day, 'd')}
-                    {hasSession && !isSelected && <span className="absolute bottom-2 w-1.5 h-1.5 bg-primary rounded-full"></span>}
+                    {hasSession && !isSelected && (
+                      <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${todayFlag ? 'bg-primary' : 'bg-secondary'}`} />
+                    )}
                   </button>
                 );
               })}
             </div>
 
-            <div className="mt-8 grid grid-cols-2 gap-2">
-              <button 
-                onClick={() => setCurrentDate(subYears(currentDate, 1))}
-                className="py-3 bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2"
-              >
-                <ChevronLeft size={14} /> Year
-              </button>
-              <button 
-                onClick={() => setCurrentDate(addYears(currentDate, 1))}
-                className="py-3 bg-surface-container-high rounded-xl text-xs font-bold text-on-surface-variant hover:text-on-surface transition-all flex items-center justify-center gap-2"
-              >
-                Year <ChevronRight size={14} />
-              </button>
+            {/* Legend */}
+            <div className="mt-5 flex items-center gap-4 text-[10px] text-on-surface-variant font-semibold">
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-secondary inline-block" /> Session</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-primary inline-block" /> Today</span>
             </div>
           </div>
         </div>
 
-        {/* Timeline */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xl font-bold text-on-surface">Upcoming Sessions</h4>
-          </div>
+        {/* Session list */}
+        <div className="lg:col-span-2 space-y-5">
+          <h4 className="text-xl font-bold text-on-surface">{displayLabel}</h4>
 
-          <div className="space-y-4">
-            {activeSessions.map((session) => (
-              <div key={session.id} className={`p-6 rounded-[32px] border transition-all ${
-                session.status === 'upcoming' 
-                  ? 'bg-surface-container-lowest border-primary/20 shadow-sm hover:shadow-md' 
-                  : 'bg-surface-container-low border-outline-variant/30 opacity-70'
-              }`}>
-                <div className="flex flex-col md:flex-row md:items-center gap-6">
-                  <div className="flex flex-col items-center justify-center px-6 py-4 bg-surface-container-high rounded-2xl min-w-[100px] border border-outline-variant/10">
-                    <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">{session.date.split(',')[0]}</span>
-                    <span className="text-3xl font-black text-on-surface">{session.date.includes('Today') ? '24' : session.date.split(' ').pop()}</span>
-                  </div>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h5 className="text-xl font-black text-on-surface">{session.title}</h5>
-                      <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
-                        session.modality === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {session.modality === 'online' ? <Globe size={12} /> : <MapPin size={12} />}
-                        {session.modality}
+          {displaySessions.length === 0 ? (
+            <div className="bg-surface-container-low rounded-[32px] border border-outline-variant/30 p-12 text-center">
+              <Calendar size={36} className="mx-auto mb-3 text-outline-variant opacity-40" />
+              <p className="text-sm text-on-surface-variant italic">No sessions on this day.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {displaySessions.map((session) => {
+                let sessionDate: Date | null = null;
+                try { sessionDate = new Date(session.date); } catch {}
+                return (
+                  <div key={session.id} className={`p-6 rounded-[32px] border transition-all ${
+                    session.status === 'upcoming'
+                      ? 'bg-surface-container-lowest border-primary/20 shadow-sm hover:shadow-md'
+                      : 'bg-surface-container-low border-outline-variant/30 opacity-70'
+                  }`}>
+                    <div className="flex flex-col md:flex-row md:items-center gap-6">
+                      <div className="flex flex-col items-center justify-center px-5 py-4 bg-surface-container-high rounded-2xl min-w-[90px] border border-outline-variant/10 text-center">
+                        {sessionDate ? (
+                          <>
+                            <span className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">{format(sessionDate, 'MMM')}</span>
+                            <span className="text-3xl font-black text-on-surface">{format(sessionDate, 'd')}</span>
+                            <span className="text-[10px] font-semibold text-on-surface-variant">{format(sessionDate, 'EEE')}</span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-bold text-on-surface">{session.date}</span>
+                        )}
                       </div>
-                      {session.status === 'upcoming' && (
-                        <div className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                          <Check size={12} /> Confirmed
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-6 text-sm">
-                      <div className="flex items-center gap-2 text-on-surface-variant">
-                        <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
-                          <User size={16} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase tracking-wider opacity-60">Tutor</span>
-                          <span className="font-bold text-on-surface">{session.tutor}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-on-surface-variant">
-                        <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
-                          <Clock size={16} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase tracking-wider opacity-60">Time & Duration</span>
-                          <span className="font-bold text-on-surface">{session.time} • {session.duration} min</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-on-surface-variant sm:col-span-2">
-                        <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
-                          <MapPin size={16} />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="text-[10px] font-black uppercase tracking-wider opacity-60">Location</span>
-                          <span className="font-bold text-on-surface">
-                            {session.modality === 'online' ? 'Virtual Classroom' : (session.location || 'TBD')}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-col sm:flex-row md:flex-col lg:flex-row items-stretch gap-3">
-                    {session.status !== 'upcoming' && (
-                      <button className="px-6 py-3 bg-surface-container-highest text-on-surface-variant rounded-2xl font-black text-sm flex items-center justify-center gap-2 border border-outline-variant/20 hover:bg-surface-container-high transition-all">
-                        <Play size={16} /> Watch Recording
-                      </button>
-                    )}
+                      <div className="flex-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <h5 className="text-xl font-black text-on-surface">{session.title}</h5>
+                          <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${
+                            session.modality === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            {session.modality === 'online' ? <Globe size={12} /> : <MapPin size={12} />}
+                            {session.modality}
+                          </div>
+                          {session.status === 'upcoming' && (
+                            <div className="px-3 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                              <Check size={12} /> Confirmed
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-6 text-sm">
+                          <div className="flex items-center gap-2 text-on-surface-variant">
+                            <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+                              <User size={16} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black uppercase tracking-wider opacity-60">Tutor</span>
+                              <span className="font-bold text-on-surface">{session.tutor}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-on-surface-variant">
+                            <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+                              <Clock size={16} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black uppercase tracking-wider opacity-60">Time & Duration</span>
+                              <span className="font-bold text-on-surface">{session.time} · {session.duration} min</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 text-on-surface-variant sm:col-span-2">
+                            <div className="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+                              <MapPin size={16} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black uppercase tracking-wider opacity-60">Location</span>
+                              <span className="font-bold text-on-surface">
+                                {session.modality === 'online' ? 'Virtual Classroom' : (session.location || 'TBD')}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
@@ -2404,11 +2370,11 @@ const TutorDashboard = () => {
     .filter(s => { const d = parseSessionDate(s.date); return d ? d < today : s.status === 'completed'; })
     .sort((a, b) => { const da = parseSessionDate(a.date); const db = parseSessionDate(b.date); return da && db ? db.getTime() - da.getTime() : 0; });
 
+  const currentTutor = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail);
   const myStudentIds = new Set(
-    sessions
-      .filter(s => currentTutorName && s.tutor === currentTutorName)
-      .map(s => s.studentId)
-      .filter(Boolean)
+    students
+      .filter(s => currentTutor && (s.assignedTutorIds ?? []).includes(currentTutor.id))
+      .map(s => s.id)
   );
 
   const getStudentName = (studentId?: string) =>
@@ -2930,7 +2896,6 @@ const StudentDetail = () => {
   const { students, courses, sessions, resources, tutors, updateStudent, contentPosts, addContentPost, updateContentPost, deleteContentPost } = useData();
 
   const student = students.find(s => s.id === id);
-  const [selectedTutorName, setSelectedTutorName] = useState<string | null>(null);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
 
   // Content post editor state
@@ -2943,9 +2908,13 @@ const StudentDetail = () => {
 
   if (!student) return <Navigate to="/students" replace />;
 
-  const filteredCourses = selectedTutorName
-    ? courses.filter(c => (c.tutor || '').split(',').map(s => s.trim()).includes(selectedTutorName))
-    : courses;
+  const toggleTutor = (tutorId: string) => {
+    const current = student.assignedTutorIds ?? [];
+    const isAssigned = current.includes(tutorId);
+    updateStudent(student.id, {
+      assignedTutorIds: isAssigned ? current.filter(id => id !== tutorId) : [...current, tutorId],
+    });
+  };
 
   const toggleCourse = (courseId: string) => {
     const isEnrolled = student.enrolledCourseIds.includes(courseId);
@@ -3037,45 +3006,63 @@ const StudentDetail = () => {
         ))}
       </div>
 
+      {/* Assign Tutors */}
+      <section className="mb-10">
+        <div className="mb-5">
+          <h3 className="text-lg font-black text-on-surface mb-1">Assigned Tutors</h3>
+          <p className="text-sm text-on-surface-variant">Assign one or more tutors to this student.</p>
+        </div>
+        {tutors.length === 0 ? (
+          <p className="text-sm text-on-surface-variant py-4">No tutors available.</p>
+        ) : (
+          <div className="space-y-2">
+            {tutors.map((t: Tutor) => {
+              const isAssigned = (student.assignedTutorIds ?? []).includes(t.id);
+              return (
+                <div key={t.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
+                      <User size={15} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-on-surface truncate">{t.name}</p>
+                      <p className="text-[11px] text-on-surface-variant truncate">{t.email}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => toggleTutor(t.id)}
+                    className={`ml-4 flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
+                      isAssigned
+                        ? 'bg-primary border-primary text-on-primary'
+                        : 'bg-transparent border-outline-variant/40 text-on-surface-variant hover:border-primary hover:text-primary'
+                    }`}
+                  >
+                    {isAssigned ? 'Assigned' : 'Assign'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {(student.assignedTutorIds ?? []).length === 0 && (
+          <p className="text-[11px] text-amber-500 mt-2 ml-1">This student has no assigned tutor yet.</p>
+        )}
+      </section>
+
       {/* Course Enrollment */}
       <section className="mb-10">
         <div className="mb-5">
           <h3 className="text-lg font-black text-on-surface mb-1">Course Enrollment</h3>
-          <p className="text-sm text-on-surface-variant">Filter by tutor, then enroll or unenroll the student.</p>
+          <p className="text-sm text-on-surface-variant">Enroll or unenroll this student from courses.</p>
         </div>
-
-        {/* Tutor filter */}
-        <div className="flex flex-wrap gap-2 mb-4">
-          <button
-            onClick={() => setSelectedTutorName(null)}
-            className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all ${selectedTutorName === null ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface'}`}
-          >
-            All Tutors
-          </button>
-          {tutors.map((t: Tutor) => (
-            <button
-              key={t.id}
-              onClick={() => setSelectedTutorName(t.name)}
-              className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 ${selectedTutorName === t.name ? 'bg-primary text-on-primary shadow-md' : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface'}`}
-            >
-              <User size={14} /> {t.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Compact course rows */}
         <div className="space-y-2">
-          {filteredCourses.map(course => {
+          {courses.map(course => {
             const isEnrolled = student.enrolledCourseIds.includes(course.id);
             return (
               <div key={course.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-sm font-bold text-on-surface truncate">{course.title}</span>
-                  {course.tutor && (
-                    <span className="hidden sm:inline-block px-2 py-0.5 rounded-full bg-secondary/10 text-secondary text-[11px] font-bold whitespace-nowrap">
-                      {course.tutor}
-                    </span>
-                  )}
+                <div className="min-w-0">
+                  <span className="text-sm font-bold text-on-surface truncate block">{course.title}</span>
+                  <span className="text-[11px] text-on-surface-variant">{getLevelLabel(course.level)}</span>
                 </div>
                 <button
                   onClick={() => toggleCourse(course.id)}
@@ -3090,8 +3077,8 @@ const StudentDetail = () => {
               </div>
             );
           })}
-          {filteredCourses.length === 0 && (
-            <p className="text-sm text-on-surface-variant py-4">No courses found for this tutor.</p>
+          {courses.length === 0 && (
+            <p className="text-sm text-on-surface-variant py-4">No courses available.</p>
           )}
         </div>
       </section>
@@ -3339,7 +3326,7 @@ const StudentDetail = () => {
 };
 
 const TutorStudents = () => {
-  const { students, courses, deleteStudent } = useData();
+  const { students, courses, tutors, deleteStudent } = useData();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddStudent, setShowAddStudent] = useState(false);
@@ -3538,6 +3525,7 @@ const TutorStudents = () => {
             <thead>
               <tr className="bg-surface-container-high">
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Student</th>
+                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Assigned Tutor(s)</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Enrolled Courses</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Last Active</th>
                 <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
@@ -3558,6 +3546,19 @@ const TutorStudents = () => {
                         <p className="font-bold text-on-surface">{student.name}</p>
                         <p className="text-xs text-on-surface-variant">{student.email}</p>
                       </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="flex flex-wrap gap-1.5">
+                      {(() => {
+                        const assigned = (student.assignedTutorIds ?? [])
+                          .map(id => tutors.find(t => t.id === id))
+                          .filter(Boolean);
+                        if (assigned.length === 0) return <span className="text-[10px] text-amber-500 font-semibold italic">None assigned</span>;
+                        return assigned.map(t => (
+                          <span key={t!.id} className="px-2.5 py-1 bg-secondary/10 text-secondary text-[10px] font-bold rounded-lg">{t!.name}</span>
+                        ));
+                      })()}
                     </div>
                   </td>
                   <td className="px-8 py-6">
@@ -3605,7 +3606,7 @@ const TutorStudents = () => {
                 </tr>
               ))}
               {filtered.length === 0 && (
-                <tr><td colSpan={4} className="px-8 py-20 text-center">
+                <tr><td colSpan={5} className="px-8 py-20 text-center">
                   <div className="flex flex-col items-center gap-4 text-on-surface-variant">
                     <Users size={48} className="opacity-20" />
                     <p className="font-bold">No students found.</p>
@@ -4107,6 +4108,7 @@ export default function App() {
                       <>
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/courses" element={<Courses />} />
+                        <Route path="/courses/:id" element={<StudentCoursePage />} />
                         <Route path="/schedule" element={<Schedule />} />
                         <Route path="/resources" element={<Resources />} />
                         <Route path="/profile" element={<Profile />} />
