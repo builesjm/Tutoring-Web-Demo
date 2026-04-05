@@ -1397,6 +1397,13 @@ const TutorSchedule = () => {
     setEditingSession(null);
   };
 
+  const handleMarkCompleted = async () => {
+    if (!editingSession) return;
+    await updateSession(editingSession.id, { status: 'completed' });
+    setSessionModal(null);
+    setEditingSession(null);
+  };
+
   // Tutor color map for team view
   const tutorColors = ['bg-primary', 'bg-secondary', 'bg-tertiary', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500'];
   const tutorColorMap = Object.fromEntries(
@@ -1627,6 +1634,16 @@ const TutorSchedule = () => {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {sessionModal === 'edit' && editingSession?.status === 'upcoming' && (
+                    <button
+                      type="button"
+                      onClick={handleMarkCompleted}
+                      title="Mark as completed"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-green-600 bg-green-50 hover:bg-green-100 text-xs font-black uppercase tracking-wider transition-colors border border-green-200"
+                    >
+                      <CheckCircle2 size={15} /> Completed
+                    </button>
+                  )}
                   {sessionModal === 'edit' && (
                     <button onClick={handleDeleteSession} className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors">
                       <Trash2 size={18} />
@@ -3622,7 +3639,7 @@ const TutorStudents = () => {
 };
 
 const TutorsList = () => {
-  const { tutors, addTutor, deleteTutor } = useData();
+  const { tutors, deleteTutor, refreshData } = useData();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [newTutor, setNewTutor] = useState({ name: '', email: '' });
@@ -3640,7 +3657,7 @@ const TutorsList = () => {
     setInviteStatus('idle');
     const result = await supabaseService.inviteTutor(newTutor.name, newTutor.email);
     if (result) {
-      addTutor({ name: result.name, email: result.email, subjects: result.subjects ?? [], lastActivity: result.lastActivity ?? 'Invited' });
+      await refreshData();
       setInviteStatus('success');
       setTimeout(() => {
         setNewTutor({ name: '', email: '' });
