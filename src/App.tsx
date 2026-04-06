@@ -127,6 +127,8 @@ const fileIconForType = (fileType: string) => {
 
 const Sidebar = ({ onLogout, role }: { onLogout: () => void, role: string }) => {
   const location = useLocation();
+  const { currentUserEmail } = useData();
+  const [profileOpen, setProfileOpen] = useState(false);
   
   const studentNavItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
@@ -175,14 +177,40 @@ const Sidebar = ({ onLogout, role }: { onLogout: () => void, role: string }) => 
         })}
       </nav>
 
-      <div className="mt-auto pt-6 border-t border-outline-variant/30 space-y-2">
-        <button 
-          onClick={onLogout}
-          className="flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 w-full text-left hover:bg-red-50 transition-colors"
+      <div className="mt-auto pt-6 border-t border-outline-variant/30 relative">
+        <button
+          onClick={() => setProfileOpen(prev => !prev)}
+          className="flex items-center gap-3 w-full px-2 py-2 rounded-xl hover:bg-surface-container-high transition-colors"
         >
-          <LogOut size={20} />
-          <span>Log Out</span>
+          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 font-bold text-sm">
+            {currentUserEmail ? currentUserEmail[0].toUpperCase() : <User size={16} />}
+          </div>
+          <div className="flex-1 text-left overflow-hidden">
+            <p className="text-xs font-semibold text-on-surface truncate">{currentUserEmail ?? 'Account'}</p>
+            <p className="text-xs text-on-surface-variant capitalize">{role}</p>
+          </div>
+          <ChevronUp size={14} className={`text-on-surface-variant transition-transform ${profileOpen ? '' : 'rotate-180'}`} />
         </button>
+
+        <AnimatePresence>
+          {profileOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 6 }}
+              transition={{ duration: 0.15 }}
+              className="absolute bottom-full left-0 right-0 mb-2 bg-surface border border-outline-variant/30 rounded-2xl shadow-lg overflow-hidden"
+            >
+              <button
+                onClick={() => { setProfileOpen(false); onLogout(); }}
+                className="flex items-center gap-3 px-4 py-3 text-red-600 w-full text-left hover:bg-red-50 transition-colors text-sm font-medium"
+              >
+                <LogOut size={16} />
+                <span>Log Out</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </aside>
   );
@@ -4018,12 +4046,13 @@ const AcceptInvite = ({ onDone }: { onDone: () => void }) => {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isInvite, setIsInvite] = useState(() => {
     // Implicit flow: hash contains type=invite
     const hash = window.location.hash;
     return hash.includes('type=invite') || hash.includes('type=recovery');
   });
-  const { role: userRole, setRole: setUserRole, setCurrentUserEmail } = useData();
+  const { role: userRole, setRole: setUserRole, setCurrentUserEmail, refreshData } = useData();
 
   useEffect(() => {
     // PKCE invite flow: Supabase redirects with ?code= in the URL.
@@ -4049,16 +4078,16 @@ export default function App() {
     }
 
     // Restore an existing session on page load / refresh (normal users)
-    supabaseService.getSession().then(session => {
+    supabaseService.getSession().then(async session => {
       if (session) {
-        supabaseService.getProfile(session.user.id).then(profile => {
-          if (profile) {
-            setIsAuthenticated(true);
-            setUserRole(profile.role);
-            setCurrentUserEmail(session.user.email ?? null);
-          }
-        });
+        const profile = await supabaseService.getProfile(session.user.id);
+        if (profile) {
+          setIsAuthenticated(true);
+          setUserRole(profile.role);
+          setCurrentUserEmail(session.user.email ?? null);
+        }
       }
+      setAuthLoading(false);
     });
 
     return () => subscription?.unsubscribe();
@@ -4069,6 +4098,7 @@ export default function App() {
     setUserRole(role);
     const session = await supabaseService.getSession();
     setCurrentUserEmail(session?.user.email ?? null);
+    await refreshData();
   };
 
   const handleInviteDone = async () => {
@@ -4092,6 +4122,11 @@ export default function App() {
   // Show invite flow if URL has invite token
   if (isInvite) {
     return <AcceptInvite onDone={handleInviteDone} />;
+  }
+
+  // Wait for auth check before rendering anything — prevents login flash
+  if (authLoading) {
+    return <div className="w-full min-h-screen bg-surface" />;
   }
 
   return (
