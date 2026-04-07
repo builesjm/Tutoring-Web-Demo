@@ -355,7 +355,7 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
                       </div>
                       <div className="flex-1 min-w-0">
                         <h5 className="font-bold text-on-surface text-sm truncate group-hover:text-primary transition-colors">{session.title}</h5>
-                        <p className="text-[10px] text-on-surface-variant mt-1 font-bold uppercase tracking-wider">{session.date} • {session.duration}m</p>
+                        <p className="text-[10px] text-on-surface-variant mt-1 font-bold uppercase tracking-wider">{formatSessionDate(session.date)} • {session.duration}m</p>
                       </div>
                     </div>
                   </div>
@@ -431,7 +431,7 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { courses, sessions, students, currentUserEmail } = useData();
+  const { courses, sessions, students, resources, currentUserEmail } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
   const enrolledCourses = currentStudent
@@ -439,17 +439,66 @@ const Dashboard = () => {
     : [];
 
   const today = new Date();
+
+  // Next upcoming session countdown
+  const upcomingSorted = sessions
+    .filter(s => {
+      if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
+      if (s.status !== 'upcoming') return false;
+      const d = parseSessionDate(s.date);
+      if (!d) return false;
+      const [h, m] = (s.time || '0:0').split(':').map(Number);
+      d.setHours(h, m, 0, 0);
+      return d > today;
+    })
+    .sort((a, b) => {
+      const aD = parseSessionDate(a.date);
+      const bD = parseSessionDate(b.date);
+      if (!aD || !bD) return 0;
+      const [ah, am] = (a.time || '0:0').split(':').map(Number);
+      const [bh, bm] = (b.time || '0:0').split(':').map(Number);
+      aD.setHours(ah, am); bD.setHours(bh, bm);
+      return aD.getTime() - bD.getTime();
+    });
+
+  let nextSessionDisplay = 'None Scheduled';
+  const nextSess = upcomingSorted[0];
+  if (nextSess) {
+    try {
+      const [h, m] = (nextSess.time || '0:0').split(':').map(Number);
+      const d = parseSessionDate(nextSess.date);
+      if (d) { d.setHours(h, m, 0, 0); }
+      const diffMs = d ? d.getTime() - today.getTime() : -1;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      if (diffMins < 1) nextSessionDisplay = 'Starting Now';
+      else if (diffMins < 60) nextSessionDisplay = `${diffMins} ${diffMins === 1 ? 'Minute' : 'Minutes'}`;
+      else if (diffHours < 24) nextSessionDisplay = `${diffHours} ${diffHours === 1 ? 'Hour' : 'Hours'}`;
+      else nextSessionDisplay = `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`;
+    } catch {}
+  }
+
+  // Completed lessons count
+  const completedCount = sessions.filter(s => {
+    if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
+    return s.status === 'completed';
+  }).length;
+
   const weekStart = startOfWeek(today, { weekStartsOn: 0 });
   const weekEnd = addDays(weekStart, 6);
   const thisWeekSessions = sessions
     .filter(s => {
       if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
-      try {
-        const d = new Date(s.date);
-        return isWithinInterval(d, { start: weekStart, end: weekEnd });
-      } catch { return false; }
+      const d = parseSessionDate(s.date);
+      if (!d) return false;
+      return isWithinInterval(d, { start: weekStart, end: weekEnd });
     })
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    .sort((a, b) => {
+      const aD = parseSessionDate(a.date);
+      const bD = parseSessionDate(b.date);
+      return (aD?.getTime() ?? 0) - (bD?.getTime() ?? 0);
+    });
 
   return (
     <motion.div
@@ -458,89 +507,311 @@ const Dashboard = () => {
       exit={{ opacity: 0, y: -20 }}
       className="max-w-7xl mx-auto"
     >
-      <Header title="Dashboard" subtitle={currentStudent ? `Welcome back, ${currentStudent.name}! Ready to learn today?` : 'Welcome back! Ready to learn today?'} />
+      <Header title="Dashboard" />
+
+      {/* Welcome Banner */}
+      <div className="bg-primary/10 rounded-[32px] p-7 mb-8 relative overflow-hidden border border-primary/20">
+        <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-end gap-1 pointer-events-none select-none opacity-20">
+          <Sparkles size={56} className="text-primary" strokeWidth={1} />
+          <Sparkles size={32} className="text-primary mb-4" strokeWidth={1} />
+        </div>
+        <div className="relative">
+          <h2 className="text-2xl md:text-3xl font-black text-primary leading-snug mb-5">
+            Welcome back, {currentStudent?.name?.split(' ')[0] ?? 'there'}.<br />
+            <span className="font-medium">What would you like to learn today?</span>
+          </h2>
+          <div className="flex items-center gap-8 flex-wrap">
+            <div className="flex items-center gap-3">
+              <Clock size={22} className="text-primary/60 flex-shrink-0" />
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-primary/50 leading-none mb-0.5">Next Session In</p>
+                <p className="text-lg font-black text-primary leading-none">{nextSessionDisplay}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <CheckCircle2 size={22} className="text-primary/60 flex-shrink-0" />
+              <div>
+                <p className="text-[9px] font-black uppercase tracking-widest text-primary/50 leading-none mb-0.5">Completed Lessons</p>
+                <p className="text-lg font-black text-primary leading-none">{completedCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Main Column: Current Courses */}
+        {/* Main Column: Current Courses + Resources */}
         <div className="lg:col-span-8 space-y-8">
-          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30">
-            <div className="flex items-center justify-between mb-8">
-              <h4 className="text-2xl font-black text-on-surface flex items-center gap-3">
-                <GraduationCap size={28} className="text-primary" /> Current Courses
-              </h4>
-              <Link to="/courses" className="text-sm font-bold text-primary hover:underline bg-primary/5 px-4 py-2 rounded-full">View All Courses</Link>
+          {/* Current Courses */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-3xl font-black text-on-surface">Current Courses</h4>
+              <Link to="/courses" className="text-base font-bold text-primary hover:underline flex items-center gap-1">
+                View all courses <ArrowRight size={15} />
+              </Link>
             </div>
 
-            <div className="space-y-4">
-              {enrolledCourses.length === 0 && (
-                <p className="text-on-surface-variant text-sm py-4">No courses assigned yet. Your tutor will add courses for you.</p>
-              )}
-              {enrolledCourses.slice(0, 3).map((course) => (
+            {enrolledCourses.length === 0 && (
+              <p className="text-on-surface-variant text-sm py-4">No courses assigned yet. Your tutor will add courses for you.</p>
+            )}
+            {enrolledCourses.map((course) => {
+              const courseSessions = sessions.filter(s => s.courseId === course.id);
+              const completedSessions = courseSessions.filter(s => s.status === 'completed');
+              const progress = courseSessions.length > 0
+                ? Math.round((completedSessions.length / courseSessions.length) * 100)
+                : 0;
+              const nextSession = courseSessions
+                .filter(s => s.status === 'upcoming')
+                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+              return (
                 <button
                   key={course.id}
                   onClick={() => navigate(`/courses/${course.id}`)}
-                  className="w-full text-left bg-surface-container-lowest rounded-[28px] border border-outline-variant/20 hover:border-primary/40 hover:shadow-lg transition-all duration-200 p-5 flex items-center gap-5 group"
+                  className="w-full text-left bg-surface-container-lowest rounded-[28px] border border-outline-variant/20 hover:border-primary/40 hover:shadow-lg transition-all duration-200 p-6 flex items-center gap-6 group"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0 group-hover:bg-primary group-hover:text-on-primary transition-all duration-200">
-                    <BookOpen size={26} />
-                  </div>
                   <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-secondary bg-secondary-container/30 px-2 py-0.5 rounded-md">
-                      {getLevelLabel(course.level)}
-                    </span>
-                    <h5 className="text-lg font-bold text-on-surface truncate mt-1 group-hover:text-primary transition-colors">{course.title}</h5>
+                    <h5 className="text-2xl font-bold text-on-surface mb-3 group-hover:text-primary transition-colors">{course.title}</h5>
+                    <div className="flex items-center gap-4 mb-2 flex-wrap">
+                      <span className="text-xs font-black uppercase tracking-widest text-primary">Progress: {progress}%</span>
+                      {nextSession && (
+                        <span className="text-xs font-black uppercase tracking-widest text-secondary truncate max-w-[200px]">
+                          Next: {nextSession.title}
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-full bg-outline-variant/20 rounded-full h-2.5">
+                      <div className="bg-primary h-2.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+                    </div>
                   </div>
-                  <ChevronRight size={20} className="text-outline-variant group-hover:text-primary transition-colors flex-shrink-0" />
+                  {course.tutor && (() => {
+                    const tutorList = course.tutor!.split(',').map(t => t.trim()).filter(Boolean);
+                    const multiple = tutorList.length > 1;
+                    return (
+                      <div className="flex flex-col items-center gap-1 flex-shrink-0" style={{ minWidth: multiple ? 80 : 72 }}>
+                        {/* avatar row — overlapping when multiple */}
+                        <div className={`flex items-center ${multiple ? '-space-x-3' : ''}`}>
+                          {tutorList.map((name, i) => (
+                            <div
+                              key={i}
+                              title={name}
+                              className={`rounded-full bg-primary/10 text-primary flex items-center justify-center font-black border-2 border-surface-container-lowest group-hover:bg-primary group-hover:text-on-primary transition-all duration-200 ${
+                                multiple ? 'w-10 h-10 text-sm' : 'w-16 h-16 text-2xl'
+                              }`}
+                              style={{ zIndex: tutorList.length - i }}
+                            >
+                              {name[0].toUpperCase()}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] font-black uppercase tracking-widest text-on-surface-variant mt-1">
+                          {multiple ? 'Tutors' : 'Tutor'}
+                        </p>
+                        <p className="text-sm font-bold text-on-surface text-center leading-tight max-w-[90px]">
+                          {tutorList.join(', ')}
+                        </p>
+                      </div>
+                    );
+                  })()}
                 </button>
-              ))}
+              );
+            })}
+          </div>
+
+          {/* Resource Library */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-2xl font-black text-on-surface">Resource Library</h4>
+              <Link to="/resources" className="text-sm font-bold text-primary hover:underline flex items-center gap-1">
+                View all <ArrowRight size={14} />
+              </Link>
             </div>
-          </section>
-        </div>
-
-        {/* Side Column: This Week's Schedule */}
-        <div className="lg:col-span-4">
-          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 sticky top-8">
-            <div className="flex items-center justify-between mb-6">
-              <h4 className="text-xl font-black text-on-surface flex items-center gap-3">
-                <Calendar size={24} className="text-primary" /> This Week
-              </h4>
-              <Link to="/schedule" className="text-xs font-bold text-primary hover:underline">Full Schedule</Link>
-            </div>
-
-            <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest mb-4">
-              {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
-            </p>
-
-            {thisWeekSessions.length === 0 ? (
-              <div className="text-center py-10">
-                <Calendar size={32} className="mx-auto mb-3 text-outline-variant opacity-40" />
-                <p className="text-sm text-on-surface-variant italic">No sessions scheduled this week.</p>
-              </div>
+            {resources.length === 0 ? (
+              <p className="text-on-surface-variant text-sm py-2">No resources available yet.</p>
             ) : (
-              <div className="space-y-3">
-                {thisWeekSessions.map(session => {
-                  const sessionDate = new Date(session.date);
-                  const todayFlag = isToday(sessionDate);
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                {resources.slice(0, 8).map(resource => {
+                  const iconBg = resource.type === 'pdf' ? 'bg-red-100 text-red-500' : resource.type === 'video' ? 'bg-blue-100 text-blue-500' : 'bg-orange-100 text-orange-500';
+                  const iconEl = resource.type === 'pdf' ? <FileText size={22} /> : resource.type === 'video' ? <Play size={22} /> : <FileIcon size={22} />;
                   return (
-                    <div key={session.id} className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
-                      todayFlag ? 'bg-primary/10 border-primary/30' : 'bg-surface-container-lowest border-outline-variant/20'
-                    }`}>
-                      <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center flex-shrink-0 ${
-                        todayFlag ? 'bg-primary text-on-primary' : 'bg-surface-container-high text-on-surface'
-                      }`}>
-                        <span className="text-[9px] font-black leading-none uppercase">{format(sessionDate, 'EEE')}</span>
-                        <span className="text-lg font-black leading-none">{format(sessionDate, 'd')}</span>
+                    <div
+                      key={resource.id}
+                      className="bg-surface-container-lowest rounded-[20px] border border-outline-variant/20 p-4 flex flex-col items-center text-center hover:border-primary/30 hover:shadow-md transition-all cursor-default"
+                    >
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${iconBg}`}>
+                        {iconEl}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-on-surface truncate">{session.title}</p>
-                        <p className="text-xs text-on-surface-variant">{session.time} · {session.tutor}</p>
-                      </div>
-                      {todayFlag && <span className="text-[9px] font-black uppercase tracking-wider text-primary bg-primary/10 px-2 py-1 rounded-full">Today</span>}
+                      <p className="text-sm font-bold text-on-surface leading-snug mb-1 line-clamp-2">{resource.title}</p>
+                      <p className="text-[11px] text-on-surface-variant">
+                        {resource.size ?? resource.duration ?? (resource.itemsCount ? `${resource.itemsCount} items` : '')}
+                      </p>
                     </div>
                   );
                 })}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Side Column: This Week's Schedule */}
+        <div className="lg:col-span-4 space-y-8">
+          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 flex flex-col">
+            <h4 className="text-xl font-black text-on-surface mb-6">Weekly Schedule</h4>
+
+            {thisWeekSessions.length === 0 ? (
+              <div className="text-center py-10 flex-1">
+                <Calendar size={32} className="mx-auto mb-3 text-outline-variant opacity-40" />
+                <p className="text-sm text-on-surface-variant italic">No sessions scheduled this week.</p>
+              </div>
+            ) : (
+              <div className="flex-1">
+                {(() => {
+                  const now = new Date();
+                  const parseTime = (t: string) => {
+                    const upper = t.toUpperCase();
+                    const pm = upper.includes('PM');
+                    const am = upper.includes('AM');
+                    const clean = upper.replace(/\s*[AP]M\s*/g, '').trim();
+                    const [hStr, mStr = '0'] = clean.split(':');
+                    let h = parseInt(hStr, 10);
+                    const m = parseInt(mStr, 10);
+                    if (pm && h !== 12) h += 12;
+                    if (am && h === 12) h = 0;
+                    return { h, m };
+                  };
+                  const sessionWithDateTime = (s: typeof thisWeekSessions[0]) => {
+                    const d = parseSessionDate(s.date);
+                    if (!d) return null;
+                    const { h, m } = parseTime(s.time || '0:00');
+                    d.setHours(h, m, 0, 0);
+                    return d;
+                  };
+                  const nextIdx = thisWeekSessions.findIndex(s => {
+                    const dt = sessionWithDateTime(s);
+                    return dt ? dt > now : false;
+                  });
+                  return thisWeekSessions.map((session, idx) => {
+                    const isLast = idx === thisWeekSessions.length - 1;
+                    const sessionDate = parseSessionDate(session.date) ?? new Date(NaN);
+                    const todayFlag = isToday(sessionDate);
+                    const isTomorrow = !todayFlag && isSameDay(sessionDate, addDays(new Date(), 1));
+                    const courseForSession = courses.find(c => c.id === session.courseId);
+                    const dayLabel = todayFlag ? 'Today' : isTomorrow ? 'Tomorrow' : format(sessionDate, 'EEE, MMM d');
+                    const sessionDateTime = sessionWithDateTime(session);
+                    const isPast = sessionDateTime ? sessionDateTime <= now : false;
+                    const isNext = idx === nextIdx;
+
+                    return (
+                      <div key={session.id} className="flex gap-4">
+                        {/* Left column: dot + segment line */}
+                        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
+                          {/* dot — sits above the line, bg matches card so line is hidden behind it */}
+                          <div className={`w-4 h-4 rounded-full flex-shrink-0 mt-1.5 z-10 relative ${
+                            isPast
+                              ? 'bg-primary border-2 border-primary'
+                              : isNext
+                              ? 'bg-surface-container-low border-[3px] border-primary'
+                              : 'bg-surface-container-low border-2 border-outline-variant/60'
+                          }`} />
+                          {/* segment line below dot, stretches to fill content height + bottom gap */}
+                          {!isLast && (
+                            <div className={`flex-1 mt-1 rounded-full ${
+                              isPast ? 'w-[2px] bg-primary/70' : 'w-px bg-outline-variant/30'
+                            }`} style={{ minHeight: 28 }} />
+                          )}
+                        </div>
+                        {/* Content */}
+                        <div className={`flex-1 min-w-0 ${!isLast ? 'pb-7' : ''}`}>
+                          <p className={`text-xs font-black uppercase tracking-widest mb-1 ${
+                            todayFlag || isNext ? 'text-primary' : 'text-on-surface-variant'
+                          }`}>
+                            {dayLabel} · {session.time}
+                          </p>
+                          <p className="text-base font-bold text-on-surface mb-1.5">{session.title}</p>
+                          {courseForSession && (
+                            <p className="text-sm text-on-surface-variant flex items-center gap-2 mb-1">
+                              <BookOpen size={13} className="flex-shrink-0" /> {courseForSession.title}
+                            </p>
+                          )}
+                          {session.location && (
+                            <p className="text-sm text-on-surface-variant flex items-center gap-2 mb-1">
+                              <MapPin size={13} className="flex-shrink-0" /> {session.location}
+                            </p>
+                          )}
+                          {session.tutor && (
+                            <p className="text-sm text-on-surface-variant flex items-center gap-2">
+                              <User size={13} className="flex-shrink-0" /> {session.tutor}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+
+            <Link
+              to="/schedule"
+              className="mt-8 w-full text-center py-3 rounded-2xl border border-outline-variant/40 text-sm font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+            >
+              View Schedule
+            </Link>
+          </section>
+
+          {/* Performance Stats */}
+          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30">
+            <h4 className="text-xl font-black text-on-surface mb-6">Performance Stats</h4>
+            <div className="grid grid-cols-2 gap-4 mb-0">
+              <div className="bg-surface-container-high rounded-2xl p-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant mb-2">Hours Studied</p>
+                <p className="text-3xl font-black text-primary">{Math.round(sessions.filter(s => {
+                  if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
+                  return s.status === 'completed';
+                }).reduce((acc, s) => acc + (s.duration || 0), 0) / 60 * 10) / 10}</p>
+              </div>
+              <div className="bg-surface-container-high rounded-2xl p-5">
+                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant mb-2">Completed Assignments</p>
+                <p className="text-3xl font-black text-primary">{completedCount}</p>
+              </div>
+            </div>
+          </section>
+
+          {/* Quote Card */}
+          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 border-l-4 border-l-primary">
+            <p className="text-base italic text-on-surface leading-relaxed mb-6">
+              "Imagination is more important than knowledge. Knowledge is limited. Imagination encircles the world."
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">E</div>
+              <div>
+                <p className="text-sm font-bold text-on-surface">Albert Einstein</p>
+                <p className="text-xs text-on-surface-variant">Theoretical Physicist</p>
+              </div>
+            </div>
+          </section>
+
+          {/* Tutoring Tip */}
+          <section className="bg-primary rounded-[40px] p-8 relative overflow-hidden">
+            <div className="absolute bottom-0 right-0 opacity-10 pointer-events-none select-none">
+              <BrainCircuit size={120} className="text-on-primary" strokeWidth={0.8} />
+            </div>
+            <div className="relative">
+              <p className="text-[10px] font-black uppercase tracking-widest text-on-primary/60 flex items-center gap-2 mb-3">
+                <Sparkles size={13} /> Scholar's Tip
+              </p>
+              <h5 className="text-xl font-black text-on-primary mb-3">The Feynman Technique</h5>
+              <p className="text-sm text-on-primary/80 leading-relaxed mb-6">
+                "If you want to master something, teach it. Simplify the concept until even a child could understand."
+              </p>
+              <a
+                href="https://fs.blog/feynman-technique/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-bold text-on-primary flex items-center gap-2 hover:gap-3 transition-all"
+              >
+                Explore Methodology <ExternalLink size={14} />
+              </a>
+            </div>
           </section>
         </div>
       </div>
@@ -799,7 +1070,7 @@ const StudentCoursePage = () => {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-on-surface truncate">{session.title}</p>
-                    <p className="text-[11px] text-on-surface-variant">{session.date} · {session.duration}m</p>
+                    <p className="text-[11px] text-on-surface-variant">{formatSessionDate(session.date)} · {session.duration}m</p>
                   </div>
                 </div>
               ))}
@@ -1379,7 +1650,7 @@ const TutorSchedule = () => {
       courseId: bookingData.courseId || undefined,
       title: bookingData.title || (courses.find(c => c.id === bookingData.courseId)?.title ?? 'Tutoring Session'),
       tutor: bookingData.tutorName,
-      date: format(dateObj, 'EEEE, MMM d'),
+      date: format(dateObj, 'yyyy-MM-dd'),
       time: timeDisplay,
       duration: bookingData.duration,
       status: 'upcoming' as const,
@@ -2585,6 +2856,28 @@ const getLevelLabel = (level: string) => {
   if (level === 'Elementary') return 'Elementary/Middle School';
   if (level === 'Uni') return 'College/University';
   return level;
+};
+
+// Parse a session date string in either "yyyy-MM-dd" or legacy "EEEE, MMM d" format
+const parseSessionDate = (dateStr: string): Date | null => {
+  if (!dateStr) return null;
+  try {
+    // ISO format
+    if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      const d = new Date(dateStr + 'T12:00:00');
+      return isNaN(d.getTime()) ? null : d;
+    }
+    // Legacy "Monday, Apr 7" or "Apr 7"
+    const parts = dateStr.split(', ');
+    const datePart = parts.length > 1 ? parts[1] : dateStr;
+    const d = parse(`${datePart} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date());
+    return isNaN(d.getTime()) ? null : d;
+  } catch { return null; }
+};
+
+const formatSessionDate = (dateStr: string) => {
+  const d = parseSessionDate(dateStr);
+  return d ? format(d, 'EEE, MMM d') : dateStr;
 };
 
 const TutorCourses = () => {
