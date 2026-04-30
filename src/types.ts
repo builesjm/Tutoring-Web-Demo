@@ -91,6 +91,7 @@ export interface ContentPost {
   id: string;
   courseId?: string;
   studentId?: string;
+  tutorEmail?: string;
   title: string;
   description: string;
   items: ContentItem[];

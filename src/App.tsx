@@ -133,7 +133,6 @@ const Sidebar = ({ onLogout, role }: { onLogout: () => void, role: string }) => 
   const studentNavItems = [
     { icon: LayoutDashboard, label: 'Dashboard', path: '/' },
     { icon: BookOpen, label: 'Courses', path: '/courses' },
-    { icon: Calendar, label: 'Schedule', path: '/schedule' },
     { icon: GraduationCap, label: 'Resources', path: '/resources' },
   ];
 
@@ -142,8 +141,7 @@ const Sidebar = ({ onLogout, role }: { onLogout: () => void, role: string }) => 
     { icon: BookOpen, label: 'Manage Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
     { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
-    { icon: Calendar, label: 'Manage Schedule', path: '/schedule' },
-    { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+    { icon: BarChart3, label: 'Beta - Analytics', path: '/analytics' },
   ];
 
   const navItems = role === 'tutor' ? tutorNavItems : studentNavItems;
@@ -221,7 +219,7 @@ const MobileNav = ({ role }: { role: string }) => {
   const studentNavItems = [
     { icon: LayoutDashboard, label: 'Home', path: '/' },
     { icon: BookOpen, label: 'Courses', path: '/courses' },
-    { icon: Calendar, label: 'Schedule', path: '/schedule' },
+    { icon: GraduationCap, label: 'Resources', path: '/resources' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 
@@ -230,8 +228,7 @@ const MobileNav = ({ role }: { role: string }) => {
     { icon: BookOpen, label: 'Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
     { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
-    { icon: Calendar, label: 'Schedule', path: '/schedule' },
-    { icon: BarChart3, label: 'Analytics', path: '/analytics' },
+    { icon: BarChart3, label: 'Beta - Analytics', path: '/analytics' },
   ];
 
   const navItems = role === 'tutor' ? tutorNavItems : studentNavItems;
@@ -431,74 +428,12 @@ const CourseModal = ({ course, onClose }: { course: Course, onClose: () => void 
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { courses, sessions, students, resources, currentUserEmail } = useData();
+  const { courses, students, contentPosts, currentUserEmail } = useData();
 
   const currentStudent = students.find(s => s.email === currentUserEmail);
   const enrolledCourses = currentStudent
     ? courses.filter(c => currentStudent.enrolledCourseIds.includes(c.id))
     : [];
-
-  const today = new Date();
-
-  // Next upcoming session countdown
-  const upcomingSorted = sessions
-    .filter(s => {
-      if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
-      if (s.status !== 'upcoming') return false;
-      const d = parseSessionDate(s.date);
-      if (!d) return false;
-      const [h, m] = (s.time || '0:0').split(':').map(Number);
-      d.setHours(h, m, 0, 0);
-      return d > today;
-    })
-    .sort((a, b) => {
-      const aD = parseSessionDate(a.date);
-      const bD = parseSessionDate(b.date);
-      if (!aD || !bD) return 0;
-      const [ah, am] = (a.time || '0:0').split(':').map(Number);
-      const [bh, bm] = (b.time || '0:0').split(':').map(Number);
-      aD.setHours(ah, am); bD.setHours(bh, bm);
-      return aD.getTime() - bD.getTime();
-    });
-
-  let nextSessionDisplay = 'None Scheduled';
-  const nextSess = upcomingSorted[0];
-  if (nextSess) {
-    try {
-      const [h, m] = (nextSess.time || '0:0').split(':').map(Number);
-      const d = parseSessionDate(nextSess.date);
-      if (d) { d.setHours(h, m, 0, 0); }
-      const diffMs = d ? d.getTime() - today.getTime() : -1;
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-      if (diffMins < 1) nextSessionDisplay = 'Starting Now';
-      else if (diffMins < 60) nextSessionDisplay = `${diffMins} ${diffMins === 1 ? 'Minute' : 'Minutes'}`;
-      else if (diffHours < 24) nextSessionDisplay = `${diffHours} ${diffHours === 1 ? 'Hour' : 'Hours'}`;
-      else nextSessionDisplay = `${diffDays} ${diffDays === 1 ? 'Day' : 'Days'}`;
-    } catch {}
-  }
-
-  // Completed lessons count
-  const completedCount = sessions.filter(s => {
-    if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
-    return s.status === 'completed';
-  }).length;
-
-  const weekStart = startOfWeek(today, { weekStartsOn: 0 });
-  const weekEnd = addDays(weekStart, 6);
-  const thisWeekSessions = sessions
-    .filter(s => {
-      if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
-      const d = parseSessionDate(s.date);
-      if (!d) return false;
-      return isWithinInterval(d, { start: weekStart, end: weekEnd });
-    })
-    .sort((a, b) => {
-      const aD = parseSessionDate(a.date);
-      const bD = parseSessionDate(b.date);
-      return (aD?.getTime() ?? 0) - (bD?.getTime() ?? 0);
-    });
 
   return (
     <motion.div
@@ -516,26 +451,10 @@ const Dashboard = () => {
           <Sparkles size={32} className="text-primary mb-4" strokeWidth={1} />
         </div>
         <div className="relative">
-          <h2 className="text-2xl md:text-3xl font-black text-primary leading-snug mb-5">
+          <h2 className="text-2xl md:text-3xl font-black text-primary leading-snug">
             Welcome back, {currentStudent?.name?.split(' ')[0] ?? 'there'}.<br />
             <span className="font-medium">What would you like to learn today?</span>
           </h2>
-          <div className="flex items-center gap-8 flex-wrap">
-            <div className="flex items-center gap-3">
-              <Clock size={22} className="text-primary/60 flex-shrink-0" />
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-primary/50 leading-none mb-0.5">Next Session In</p>
-                <p className="text-lg font-black text-primary leading-none">{nextSessionDisplay}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <CheckCircle2 size={22} className="text-primary/60 flex-shrink-0" />
-              <div>
-                <p className="text-[9px] font-black uppercase tracking-widest text-primary/50 leading-none mb-0.5">Completed Lessons</p>
-                <p className="text-lg font-black text-primary leading-none">{completedCount}</p>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -555,32 +474,49 @@ const Dashboard = () => {
               <p className="text-on-surface-variant text-sm py-4">No courses assigned yet. Your tutor will add courses for you.</p>
             )}
             {enrolledCourses.map((course) => {
-              const courseSessions = sessions.filter(s => s.courseId === course.id);
-              const completedSessions = courseSessions.filter(s => s.status === 'completed');
-              const progress = courseSessions.length > 0
-                ? Math.round((completedSessions.length / courseSessions.length) * 100)
-                : 0;
-              const nextSession = courseSessions
-                .filter(s => s.status === 'upcoming')
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+              const latestPost = contentPosts
+                .filter(cp => cp.courseId === course.id && cp.status === 'published')
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+              const seenPostId = localStorage.getItem(`seen_post_${course.id}`);
+              const isNew = latestPost
+                ? latestPost.id !== seenPostId &&
+                  (Date.now() - new Date(latestPost.createdAt).getTime()) < 7 * 86400000
+                : false;
               return (
                 <button
                   key={course.id}
-                  onClick={() => navigate(`/courses/${course.id}`)}
-                  className="w-full text-left bg-surface-container-lowest rounded-[28px] border border-outline-variant/20 hover:border-primary/40 hover:shadow-lg transition-all duration-200 p-6 flex items-center gap-6 group"
+                  onClick={() => {
+                    if (latestPost) {
+                      localStorage.setItem(`seen_post_${course.id}`, latestPost.id);
+                    }
+                    navigate(`/courses/${course.id}`);
+                  }}
+                  className={`w-full text-left rounded-[28px] border transition-all duration-200 p-6 flex items-center gap-6 group ${
+                    isNew
+                      ? 'bg-primary/5 border-primary/40 shadow-md hover:shadow-xl hover:border-primary/70'
+                      : 'bg-surface-container-lowest border-outline-variant/20 hover:border-primary/40 hover:shadow-lg'
+                  }`}
                 >
                   <div className="flex-1 min-w-0">
                     <h5 className="text-2xl font-bold text-on-surface mb-3 group-hover:text-primary transition-colors">{course.title}</h5>
-                    <div className="flex items-center gap-4 mb-2 flex-wrap">
-                      <span className="text-xs font-black uppercase tracking-widest text-primary">Progress: {progress}%</span>
-                      {nextSession && (
-                        <span className="text-xs font-black uppercase tracking-widest text-secondary truncate max-w-[200px]">
-                          Next: {nextSession.title}
-                        </span>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {latestPost && isNew && (
+                        <div className="flex items-center gap-2">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+                          </span>
+                          <span className="text-[11px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-primary text-on-primary shadow-sm">
+                            New Posting!
+                          </span>
+                          <span className="text-xs text-on-surface-variant font-medium truncate max-w-[200px]">
+                            {latestPost.title}
+                          </span>
+                        </div>
                       )}
-                    </div>
-                    <div className="w-full bg-outline-variant/20 rounded-full h-2.5">
-                      <div className="bg-primary h-2.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+                      {!latestPost && (
+                        <span className="text-xs text-on-surface-variant/50 italic">No posts yet</span>
+                      )}
                     </div>
                   </div>
                   {course.tutor && (() => {
@@ -617,202 +553,130 @@ const Dashboard = () => {
             })}
           </div>
 
-          {/* Resource Library */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="text-2xl font-black text-on-surface">Resource Library</h4>
-              <Link to="/resources" className="text-sm font-bold text-primary hover:underline flex items-center gap-1">
-                View all <ArrowRight size={14} />
-              </Link>
-            </div>
-            {resources.length === 0 ? (
-              <p className="text-on-surface-variant text-sm py-2">No resources available yet.</p>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {resources.slice(0, 8).map(resource => {
-                  const iconBg = resource.type === 'pdf' ? 'bg-red-100 text-red-500' : resource.type === 'video' ? 'bg-blue-100 text-blue-500' : 'bg-orange-100 text-orange-500';
-                  const iconEl = resource.type === 'pdf' ? <FileText size={22} /> : resource.type === 'video' ? <Play size={22} /> : <FileIcon size={22} />;
-                  return (
-                    <div
-                      key={resource.id}
-                      className="bg-surface-container-lowest rounded-[20px] border border-outline-variant/20 p-4 flex flex-col items-center text-center hover:border-primary/30 hover:shadow-md transition-all cursor-default"
-                    >
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${iconBg}`}>
-                        {iconEl}
-                      </div>
-                      <p className="text-sm font-bold text-on-surface leading-snug mb-1 line-clamp-2">{resource.title}</p>
-                      <p className="text-[11px] text-on-surface-variant">
-                        {resource.size ?? resource.duration ?? (resource.itemsCount ? `${resource.itemsCount} items` : '')}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Side Column: This Week's Schedule */}
+        {/* Side Column */}
         <div className="lg:col-span-4 space-y-8">
-          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 flex flex-col">
-            <h4 className="text-xl font-black text-on-surface mb-6">Weekly Schedule</h4>
-
-            {thisWeekSessions.length === 0 ? (
-              <div className="text-center py-10 flex-1">
-                <Calendar size={32} className="mx-auto mb-3 text-outline-variant opacity-40" />
-                <p className="text-sm text-on-surface-variant italic">No sessions scheduled this week.</p>
-              </div>
-            ) : (
-              <div className="flex-1">
-                {(() => {
-                  const now = new Date();
-                  const parseTime = (t: string) => {
-                    const upper = t.toUpperCase();
-                    const pm = upper.includes('PM');
-                    const am = upper.includes('AM');
-                    const clean = upper.replace(/\s*[AP]M\s*/g, '').trim();
-                    const [hStr, mStr = '0'] = clean.split(':');
-                    let h = parseInt(hStr, 10);
-                    const m = parseInt(mStr, 10);
-                    if (pm && h !== 12) h += 12;
-                    if (am && h === 12) h = 0;
-                    return { h, m };
-                  };
-                  const sessionWithDateTime = (s: typeof thisWeekSessions[0]) => {
-                    const d = parseSessionDate(s.date);
-                    if (!d) return null;
-                    const { h, m } = parseTime(s.time || '0:00');
-                    d.setHours(h, m, 0, 0);
-                    return d;
-                  };
-                  const nextIdx = thisWeekSessions.findIndex(s => {
-                    const dt = sessionWithDateTime(s);
-                    return dt ? dt > now : false;
-                  });
-                  return thisWeekSessions.map((session, idx) => {
-                    const isLast = idx === thisWeekSessions.length - 1;
-                    const sessionDate = parseSessionDate(session.date) ?? new Date(NaN);
-                    const todayFlag = isToday(sessionDate);
-                    const isTomorrow = !todayFlag && isSameDay(sessionDate, addDays(new Date(), 1));
-                    const courseForSession = courses.find(c => c.id === session.courseId);
-                    const dayLabel = todayFlag ? 'Today' : isTomorrow ? 'Tomorrow' : format(sessionDate, 'EEE, MMM d');
-                    const sessionDateTime = sessionWithDateTime(session);
-                    const isPast = sessionDateTime ? sessionDateTime <= now : false;
-                    const isNext = idx === nextIdx;
-
-                    return (
-                      <div key={session.id} className="flex gap-4">
-                        {/* Left column: dot + segment line */}
-                        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 16 }}>
-                          {/* dot — sits above the line, bg matches card so line is hidden behind it */}
-                          <div className={`w-4 h-4 rounded-full flex-shrink-0 mt-1.5 z-10 relative ${
-                            isPast
-                              ? 'bg-primary border-2 border-primary'
-                              : isNext
-                              ? 'bg-surface-container-low border-[3px] border-primary'
-                              : 'bg-surface-container-low border-2 border-outline-variant/60'
-                          }`} />
-                          {/* segment line below dot, stretches to fill content height + bottom gap */}
-                          {!isLast && (
-                            <div className={`flex-1 mt-1 rounded-full ${
-                              isPast ? 'w-[2px] bg-primary/70' : 'w-px bg-outline-variant/30'
-                            }`} style={{ minHeight: 28 }} />
-                          )}
-                        </div>
-                        {/* Content */}
-                        <div className={`flex-1 min-w-0 ${!isLast ? 'pb-7' : ''}`}>
-                          <p className={`text-xs font-black uppercase tracking-widest mb-1 ${
-                            todayFlag || isNext ? 'text-primary' : 'text-on-surface-variant'
-                          }`}>
-                            {dayLabel} · {session.time}
-                          </p>
-                          <p className="text-base font-bold text-on-surface mb-1.5">{session.title}</p>
-                          {courseForSession && (
-                            <p className="text-sm text-on-surface-variant flex items-center gap-2 mb-1">
-                              <BookOpen size={13} className="flex-shrink-0" /> {courseForSession.title}
-                            </p>
-                          )}
-                          {session.location && (
-                            <p className="text-sm text-on-surface-variant flex items-center gap-2 mb-1">
-                              <MapPin size={13} className="flex-shrink-0" /> {session.location}
-                            </p>
-                          )}
-                          {session.tutor && (
-                            <p className="text-sm text-on-surface-variant flex items-center gap-2">
-                              <User size={13} className="flex-shrink-0" /> {session.tutor}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            )}
-
-            <Link
-              to="/schedule"
-              className="mt-8 w-full text-center py-3 rounded-2xl border border-outline-variant/40 text-sm font-bold text-on-surface hover:bg-surface-container-high transition-colors"
-            >
-              View Schedule
-            </Link>
-          </section>
-
-          {/* Performance Stats */}
-          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30">
-            <h4 className="text-xl font-black text-on-surface mb-6">Performance Stats</h4>
-            <div className="grid grid-cols-2 gap-4 mb-0">
-              <div className="bg-surface-container-high rounded-2xl p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant mb-2">Hours Studied</p>
-                <p className="text-3xl font-black text-primary">{Math.round(sessions.filter(s => {
-                  if (currentStudent && s.studentId && s.studentId !== currentStudent.id) return false;
-                  return s.status === 'completed';
-                }).reduce((acc, s) => acc + (s.duration || 0), 0) / 60 * 10) / 10}</p>
-              </div>
-              <div className="bg-surface-container-high rounded-2xl p-5">
-                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant mb-2">Completed Assignments</p>
-                <p className="text-3xl font-black text-primary">{completedCount}</p>
-              </div>
-            </div>
-          </section>
-
           {/* Quote Card */}
-          <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 border-l-4 border-l-primary">
-            <p className="text-base italic text-on-surface leading-relaxed mb-6">
-              "Imagination is more important than knowledge. Knowledge is limited. Imagination encircles the world."
-            </p>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">E</div>
-              <div>
-                <p className="text-sm font-bold text-on-surface">Albert Einstein</p>
-                <p className="text-xs text-on-surface-variant">Theoretical Physicist</p>
-              </div>
-            </div>
-          </section>
+          {(() => {
+            const quotes = [
+              { text: 'Imagination is more important than knowledge. Knowledge is limited. Imagination encircles the world.', author: 'Albert Einstein', role: 'Theoretical Physicist' },
+              { text: 'The secret of getting ahead is getting started.', author: 'Mark Twain', role: 'Author' },
+              { text: 'It always seems impossible until it is done.', author: 'Nelson Mandela', role: 'Leader & Activist' },
+              { text: 'You don\'t have to be great to start, but you have to start to be great.', author: 'Zig Ziglar', role: 'Author & Speaker' },
+              { text: 'The more that you read, the more things you will know. The more that you learn, the more places you\'ll go.', author: 'Dr. Seuss', role: 'Author' },
+              { text: 'Success is the sum of small efforts, repeated day in and day out.', author: 'Robert Collier', role: 'Author' },
+              { text: 'Education is the most powerful weapon which you can use to change the world.', author: 'Nelson Mandela', role: 'Leader & Activist' },
+              { text: 'The beautiful thing about learning is that nobody can take it away from you.', author: 'B.B. King', role: 'Musician' },
+              { text: 'Don\'t watch the clock; do what it does. Keep going.', author: 'Sam Levenson', role: 'Author & Humorist' },
+              { text: 'Believe you can and you\'re halfway there.', author: 'Theodore Roosevelt', role: '26th U.S. President' },
+            ];
+            const q = quotes[Math.floor(Date.now() / 86400000) % quotes.length];
+            return (
+              <section className="bg-surface-container-low rounded-[40px] p-8 border border-outline-variant/30 border-l-4 border-l-primary">
+                <p className="text-base italic text-on-surface leading-relaxed mb-6">"{q.text}"</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">
+                    {q.author[0]}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-on-surface">{q.author}</p>
+                    <p className="text-xs text-on-surface-variant">{q.role}</p>
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           {/* Tutoring Tip */}
-          <section className="bg-primary rounded-[40px] p-8 relative overflow-hidden">
-            <div className="absolute bottom-0 right-0 opacity-10 pointer-events-none select-none">
-              <BrainCircuit size={120} className="text-on-primary" strokeWidth={0.8} />
-            </div>
-            <div className="relative">
-              <p className="text-[10px] font-black uppercase tracking-widest text-on-primary/60 flex items-center gap-2 mb-3">
-                <Sparkles size={13} /> Scholar's Tip
-              </p>
-              <h5 className="text-xl font-black text-on-primary mb-3">The Feynman Technique</h5>
-              <p className="text-sm text-on-primary/80 leading-relaxed mb-6">
-                "If you want to master something, teach it. Simplify the concept until even a child could understand."
-              </p>
-              <a
-                href="https://fs.blog/feynman-technique/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-bold text-on-primary flex items-center gap-2 hover:gap-3 transition-all"
-              >
-                Explore Methodology <ExternalLink size={14} />
-              </a>
-            </div>
-          </section>
+          {(() => {
+            const tips = [
+              {
+                title: 'The Feynman Technique',
+                quote: 'If you want to master something, teach it. Simplify the concept until a friend could understand it from scratch.',
+                label: 'Learn the technique',
+                url: 'https://fs.blog/feynman-technique/',
+              },
+              {
+                title: 'Space Out Your Studying',
+                quote: 'Cramming feels productive but fades fast. Studying the same material across multiple shorter sessions locks it into long-term memory.',
+                label: 'How spaced repetition works',
+                url: 'https://www.youtube.com/watch?v=Z-zNHHpXoMM',
+              },
+              {
+                title: 'Active Recall Beats Re-reading',
+                quote: 'Closing your notes and trying to recall what you just learned — even imperfectly — is one of the most effective study habits you can build.',
+                label: 'See the research',
+                url: 'https://www.youtube.com/watch?v=ukLnPbIffxE',
+              },
+              {
+                title: 'The 2-Minute Rule',
+                quote: 'If a task takes less than two minutes, do it now. Letting small tasks pile up creates mental clutter that makes everything harder.',
+                label: 'Read more',
+                url: 'https://jamesclear.com/how-to-stop-procrastinating',
+              },
+              {
+                title: 'Sleep Is Part of Studying',
+                quote: 'Your brain consolidates what you learned during sleep. Pulling an all-nighter before a test often does more harm than good.',
+                label: 'Why sleep matters for memory',
+                url: 'https://www.youtube.com/watch?v=LWULB9Aoopc',
+              },
+              {
+                title: 'Write It By Hand',
+                quote: 'Taking notes by hand — instead of typing — forces you to process and summarize ideas, which leads to better understanding.',
+                label: 'The science behind it',
+                url: 'https://www.youtube.com/watch?v=IlU-zDU6aQ0',
+              },
+              {
+                title: 'Start With the Hardest Thing',
+                quote: 'Tackle your most difficult subject or task first, when your focus and energy are at their peak. Save easier work for later.',
+                label: 'Explore deep work',
+                url: 'https://www.youtube.com/watch?v=gTaJhjQHcf8',
+              },
+              {
+                title: 'Ask "Why?" More Often',
+                quote: 'Understanding why something works — not just how — makes it stick. Push past memorization and look for the logic underneath.',
+                label: 'First principles thinking',
+                url: 'https://fs.blog/first-principles/',
+              },
+              {
+                title: 'Take Real Breaks',
+                quote: 'Short breaks during study sessions improve focus over time. Step away fully — no phone, no half-studying. Then come back sharp.',
+                label: 'The Pomodoro method',
+                url: 'https://www.youtube.com/watch?v=mNBmG24djoY',
+              },
+              {
+                title: 'Mistakes Are the Material',
+                quote: 'Every wrong answer is information. Instead of moving on, pause and figure out exactly where your thinking went wrong.',
+                label: 'Growth mindset explained',
+                url: 'https://www.youtube.com/watch?v=hiiEeMN7vbQ',
+              },
+            ];
+            const dayIndex = Math.floor(Date.now() / 86400000) % tips.length;
+            const tip = tips[dayIndex];
+            return (
+              <section className="bg-primary rounded-[40px] p-8 relative overflow-hidden">
+                <div className="absolute bottom-0 right-0 opacity-10 pointer-events-none select-none">
+                  <BrainCircuit size={120} className="text-on-primary" strokeWidth={0.8} />
+                </div>
+                <div className="relative">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-on-primary/60 flex items-center gap-2 mb-3">
+                    <Sparkles size={13} /> Scholar's Tip
+                  </p>
+                  <h5 className="text-xl font-black text-on-primary mb-3">{tip.title}</h5>
+                  <p className="text-sm text-on-primary/80 leading-relaxed mb-6">"{tip.quote}"</p>
+                  <a
+                    href={tip.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-bold text-on-primary flex items-center gap-2 hover:gap-3 transition-all"
+                  >
+                    {tip.label} <ExternalLink size={14} />
+                  </a>
+                </div>
+              </section>
+            );
+          })()}
         </div>
       </div>
     </motion.div>
@@ -898,7 +762,7 @@ const Courses = () => {
         {filteredCourses.length > 0 ? filteredCourses.map((course) => {
           if (viewMode === 'list') {
             return (
-              <motion.div layout key={course.id}
+              <div key={course.id}
                 onClick={() => setSelectedCourse(course)}
                 className="group bg-surface-container-lowest rounded-3xl border border-outline-variant/30 hover:shadow-md hover:border-primary/30 transition-all duration-200 cursor-pointer p-4 flex items-center gap-4"
               >
@@ -913,12 +777,12 @@ const Courses = () => {
                   <p className="text-xs text-on-surface-variant truncate">{course.description}</p>
                 </div>
                 <ChevronRight size={18} className="text-outline-variant group-hover:text-primary transition-colors flex-shrink-0" />
-              </motion.div>
+              </div>
             );
           }
 
           return (
-            <motion.div layout key={course.id}
+            <div key={course.id}
               onClick={() => setSelectedCourse(course)}
               className="group bg-surface-container-lowest rounded-[32px] border border-outline-variant/30 hover:shadow-lg hover:border-primary/30 transition-all duration-200 cursor-pointer flex flex-col p-6"
             >
@@ -933,7 +797,7 @@ const Courses = () => {
               <div className="mt-6 flex items-center justify-end">
                 <ChevronRight size={20} className="text-outline-variant group-hover:text-primary transition-colors" />
               </div>
-            </motion.div>
+            </div>
           );
         }) : (
           <div className="col-span-full py-20 text-center">
@@ -986,10 +850,113 @@ const Courses = () => {
   );
 };
 
+const SessionDetailView = ({
+  session,
+  course,
+  resources,
+  onBack,
+}: {
+  session: Session;
+  course: Course;
+  resources: Resource[];
+  onBack: () => void;
+}) => {
+  const sessionFiles = resources.slice(0, 3); // use course resources as shared files demo
+  return (
+    <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} className="max-w-4xl mx-auto">
+      <button onClick={onBack} className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-6 font-semibold">
+        <ChevronLeft size={18} /> Back to Sessions
+      </button>
+
+      {/* Session Header */}
+      <div className="mb-10">
+        <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+          <div>
+            <span className={`inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-widest mb-2 ${
+              session.status === 'completed' ? 'text-primary' : session.status === 'upcoming' ? 'text-blue-500' : 'text-amber-500'
+            }`}>
+              {session.status === 'completed' ? <CheckCircle2 size={12} /> : <Clock size={12} />}
+              {session.status}
+            </span>
+            <h1 className="text-3xl font-black text-on-surface mb-1">{session.title}</h1>
+            <p className="text-sm text-on-surface-variant">{course.title}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm font-bold text-on-surface">{formatSessionDate(session.date)}</p>
+            <p className="text-xs text-on-surface-variant mt-0.5">{session.time} · {session.duration}min</p>
+            {session.location && <p className="text-xs text-on-surface-variant mt-0.5 flex items-center gap-1 justify-end"><MapPin size={11} /> {session.location}</p>}
+          </div>
+        </div>
+        {session.description && <p className="text-sm text-on-surface-variant leading-relaxed">{session.description}</p>}
+      </div>
+
+      <div className="space-y-12">
+        {/* Recording */}
+        <div>
+          <h2 className="text-lg font-black text-on-surface mb-4">Recording</h2>
+          {session.status === 'completed' ? (
+            <div className="bg-surface-container rounded-2xl aspect-video flex flex-col items-center justify-center gap-3">
+              <div className="w-16 h-16 rounded-full bg-primary flex items-center justify-center shadow-lg">
+                <Play size={28} className="text-on-primary ml-1" />
+              </div>
+              <p className="text-sm font-bold text-on-surface">Recording Available</p>
+              <p className="text-xs text-on-surface-variant">{session.duration} min · {session.type === 'video' || session.type === 'both' ? 'Video + Audio' : 'Audio Only'}</p>
+            </div>
+          ) : (
+            <div className="bg-surface-container rounded-2xl aspect-video flex flex-col items-center justify-center gap-3 opacity-50">
+              <Film size={36} className="text-outline-variant" />
+              <p className="text-sm text-on-surface-variant">Available after the session</p>
+            </div>
+          )}
+        </div>
+
+        {/* Notes */}
+        <div>
+          <h2 className="text-lg font-black text-on-surface mb-4">Session Notes</h2>
+          {session.description ? (
+            <p className="text-sm text-on-surface leading-relaxed">{session.description}</p>
+          ) : (
+            <p className="text-sm text-on-surface-variant italic">
+              {session.status === 'upcoming' ? 'Notes will be added during or after the session.' : 'No notes added for this session yet.'}
+            </p>
+          )}
+        </div>
+
+        {/* Shared Files */}
+        <div>
+          <h2 className="text-lg font-black text-on-surface mb-4">Shared Files</h2>
+          {sessionFiles.length === 0 ? (
+            <p className="text-sm text-on-surface-variant italic">No files shared for this session.</p>
+          ) : (
+            <div className="divide-y divide-outline-variant/15">
+              {sessionFiles.map(res => {
+                const iconBg = res.type === 'pdf' ? 'bg-red-100 text-red-500' : res.type === 'video' ? 'bg-blue-100 text-blue-500' : 'bg-orange-100 text-orange-500';
+                const iconEl = res.type === 'pdf' ? <FileText size={16} /> : res.type === 'video' ? <Film size={16} /> : <FileIcon size={16} />;
+                return (
+                  <div key={res.id} className="flex items-center gap-4 py-3 hover:bg-surface-container rounded-xl px-3 -mx-3 transition-colors cursor-pointer">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>{iconEl}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-on-surface truncate">{res.title}</p>
+                      <p className="text-xs text-on-surface-variant">{res.type.toUpperCase()} · {res.size || res.duration || (res.itemsCount ? `${res.itemsCount} items` : '')}</p>
+                    </div>
+                    <ArrowUpRight size={15} className="text-outline-variant flex-shrink-0" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
 const StudentCoursePage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { courses, students, currentUserEmail, contentPosts, sessions, feedback, resources } = useData();
+  const { courses, students, currentUserEmail, contentPosts, resources, tutors } = useData();
+
+  const [activeTab, setActiveTab] = useState<'overview' | 'content'>('overview');
 
   const course = courses.find(c => c.id === id);
   const currentStudent = students.find(s => s.email === currentUserEmail);
@@ -998,137 +965,287 @@ const StudentCoursePage = () => {
 
   const coursePosts = contentPosts.filter(cp =>
     cp.courseId === course.id &&
-    cp.studentId === currentStudent?.id &&
+    (!cp.studentId || cp.studentId === currentStudent?.id) &&
     cp.status === 'published'
   );
-  const courseSessions = sessions.filter(s => s.courseId === course.id);
   const courseResources = resources.filter(r => r.courseId === course.id);
-  const courseFeedback = feedback.filter(f => f.courseId === course.id);
+
+  const tutorList = course.tutor ? course.tutor.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+  const tabs = [
+    { key: 'overview' as const, label: 'Overview', icon: LayoutDashboard },
+    { key: 'content' as const, label: 'Content', icon: BookOpen },
+  ];
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-4xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="max-w-5xl mx-auto">
       <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-6 font-semibold">
         <ChevronLeft size={18} /> Back to Dashboard
       </button>
 
-      {/* Content posts */}
-      <section className="mb-8">
-        <h2 className="text-lg font-black text-on-surface mb-4">Course Content</h2>
-        {coursePosts.length === 0 ? (
-          <div className="bg-surface-container-low rounded-3xl border border-outline-variant/30 p-8 text-center">
-            <BookOpen size={36} className="mx-auto mb-3 text-outline-variant opacity-40" />
-            <p className="text-sm text-on-surface-variant italic">No content published for this course yet.</p>
+      {/* Tab Bar */}
+      <div className="flex gap-6 mb-10 border-b border-outline-variant/20">
+        {tabs.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 pb-3 text-sm font-bold transition-all duration-200 border-b-2 -mb-px ${
+              activeTab === tab.key
+                ? 'border-primary text-primary'
+                : 'border-transparent text-on-surface-variant hover:text-on-surface'
+            }`}
+          >
+            <tab.icon size={15} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Course Hero */}
+      <div className="mb-10">
+        <div className="flex items-start justify-between gap-6 flex-wrap mb-4">
+          <div className="flex-1 min-w-0">
+            <span className="text-[11px] font-black uppercase tracking-widest text-primary/60 mb-2 block">{course.level === 'Uni' ? 'University' : course.level}</span>
+            <h1 className="text-4xl font-black text-on-surface mb-3 leading-tight">{course.title}</h1>
+            {course.description && <p className="text-base text-on-surface-variant leading-relaxed max-w-xl">{course.description}</p>}
           </div>
-        ) : (
-          <div className="space-y-5">
-            {coursePosts.map(post => (
-              <div key={post.id} className="bg-surface-container-low rounded-[28px] border border-outline-variant/20 p-6 space-y-4">
-                <div>
-                  <h3 className="text-base font-black text-on-surface">{post.title}</h3>
-                  {post.description && <p className="text-sm text-on-surface-variant leading-relaxed mt-1">{post.description}</p>}
+          {tutorList.length > 0 && (
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className={`flex items-center ${tutorList.length > 1 ? '-space-x-3' : ''}`}>
+                {tutorList.map((name, i) => (
+                  <div key={i} title={name} className={`rounded-full bg-primary/10 text-primary flex items-center justify-center font-black border-2 border-surface ${tutorList.length > 1 ? 'w-10 h-10 text-sm' : 'w-12 h-12 text-lg'}`} style={{ zIndex: tutorList.length - i }}>
+                    {name[0].toUpperCase()}
+                  </div>
+                ))}
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">{tutorList.length > 1 ? 'Tutors' : 'Tutor'}</p>
+                <p className="text-sm font-bold text-on-surface">{tutorList.join(', ')}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-6 flex-wrap">
+          <div>
+            <p className="text-lg font-black text-primary">{coursePosts.length}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Posts</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── OVERVIEW TAB ── */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'overview' && (
+          <motion.div key="overview" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {coursePosts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-24 text-center">
+                <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mb-4">
+                  <Calendar size={28} className="text-outline-variant opacity-50" />
                 </div>
-                {post.items.map((item, i) => (
-                  <div key={i}>
-                    {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
-                      <iframe src={toYouTubeEmbed(item.url!)!} className="w-full rounded-2xl border border-outline-variant/20" height="240" allowFullScreen />
+                <p className="text-base font-bold text-on-surface mb-1">No posts yet</p>
+                <p className="text-sm text-on-surface-variant">Check back soon — your tutor will post updates here.</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {coursePosts.map(post => (
+                  <div key={post.id} className="bg-surface-container-low rounded-[28px] p-8 border border-outline-variant/30 shadow-sm space-y-5">
+                    {/* Post header */}
+                    {(() => {
+                      const author = post.tutorEmail
+                        ? tutors.find(t => t.email === post.tutorEmail)
+                        : null;
+                      const authorName = author?.name ?? (tutorList.length > 0 ? tutorList[0] : null);
+                      return (
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            {authorName && (
+                              <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">
+                                {authorName[0].toUpperCase()}
+                              </div>
+                            )}
+                            {authorName && (
+                              <p className="text-sm font-bold text-on-surface">{authorName}</p>
+                            )}
+                          </div>
+                          <p className="text-sm text-on-surface-variant flex-shrink-0">
+                            {(() => { try { return format(new Date(post.createdAt), 'MMM d, yyyy'); } catch { return post.createdAt; } })()}
+                          </p>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Title */}
+                    <h3 className="text-3xl font-black text-on-surface leading-tight tracking-tight">{post.title}</h3>
+
+                    {/* Body */}
+                    {post.description && (
+                      <p className="text-base text-on-surface-variant leading-relaxed">{post.description}</p>
                     )}
-                    {item.type === 'file' && (
-                      <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
-                        {fileIconForType(item.fileType ?? '')}
-                        <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
+
+                    {/* Attached media */}
+                    {post.items.length > 0 && (
+                      <div className="space-y-4 pt-1">
+                        {post.items.map((item, i) => (
+                          <div key={i}>
+                            {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                              <div className="rounded-2xl overflow-hidden aspect-video w-full">
+                                <iframe
+                                  src={toYouTubeEmbed(item.url!)!}
+                                  className="w-full h-full"
+                                  allowFullScreen
+                                />
+                              </div>
+                            )}
+                            {item.type === 'file' && (
+                              <div className="flex items-center gap-3 px-4 py-3 bg-surface-container rounded-xl border border-outline-variant/20">
+                                {fileIconForType(item.fileType ?? '')}
+                                <span className="text-sm font-semibold text-on-surface truncate flex-1">{item.fileName}</span>
+                              </div>
+                            )}
+                            {item.type === 'link' && (
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-3 px-4 py-3 bg-primary/8 border border-primary/20 rounded-xl hover:bg-primary/15 transition-colors group w-fit max-w-full"
+                              >
+                                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+                                  <ExternalLink size={14} className="text-on-primary" />
+                                </div>
+                                <span className="text-sm font-bold text-primary group-hover:underline truncate">{item.label ?? item.url}</span>
+                              </a>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                    )}
-                    {item.type === 'link' && (
-                      <a href={item.url} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20 hover:bg-tertiary/10 transition-colors">
-                        <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
-                        <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
-                      </a>
                     )}
                   </div>
                 ))}
               </div>
-            ))}
-          </div>
+            )}
+          </motion.div>
         )}
-      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Sessions */}
-        <section>
-          <h2 className="text-lg font-black text-on-surface mb-4 flex items-center gap-2">
-            <Video size={20} className="text-primary" /> Sessions
-          </h2>
-          {courseSessions.length === 0 ? (
-            <p className="text-sm text-on-surface-variant italic">No sessions recorded yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {courseSessions.map(session => (
-                <div key={session.id} className="bg-surface-container-low rounded-2xl border border-outline-variant/20 p-4 flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                    <Calendar size={18} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-on-surface truncate">{session.title}</p>
-                    <p className="text-[11px] text-on-surface-variant">{formatSessionDate(session.date)} · {session.duration}m</p>
-                  </div>
+        {/* ── CONTENT TAB ── */}
+        {activeTab === 'content' && (
+          <motion.div key="content" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-12">
+            {/* Course resources (files, videos, zips) */}
+            {courseResources.length > 0 && (
+              <div>
+                <h2 className="text-xl font-black text-on-surface mb-5">Files & Resources</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {courseResources.map(res => {
+                    const iconBg = res.type === 'pdf' ? 'bg-red-100 text-red-500' : res.type === 'video' ? 'bg-blue-100 text-blue-500' : 'bg-orange-100 text-orange-500';
+                    const iconEl = res.type === 'pdf' ? <FileText size={22} /> : res.type === 'video' ? <Film size={22} /> : <FileIcon size={22} />;
+                    return (
+                      <div key={res.id} className="p-4 flex flex-col items-center text-center hover:bg-surface-container rounded-2xl transition-colors cursor-pointer">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ${iconBg}`}>{iconEl}</div>
+                        <p className="text-sm font-bold text-on-surface leading-snug mb-1 line-clamp-2">{res.title}</p>
+                        <p className="text-[11px] text-on-surface-variant">{res.size ?? res.duration ?? (res.itemsCount ? `${res.itemsCount} items` : res.type.toUpperCase())}</p>
+                      </div>
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Resources */}
-        <section>
-          <h2 className="text-lg font-black text-on-surface mb-4 flex items-center gap-2">
-            <FileText size={20} className="text-primary" /> Resources
-          </h2>
-          {courseResources.length === 0 ? (
-            <p className="text-sm text-on-surface-variant italic">No resources uploaded yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {courseResources.map(res => (
-                <div key={res.id} className="flex items-center gap-3 p-4 bg-surface-container-low rounded-2xl border border-outline-variant/20">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
-                    <FileText size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-on-surface truncate">{res.title}</p>
-                    <p className="text-[11px] text-on-surface-variant uppercase tracking-wider font-bold">{res.type} · {res.size || res.duration || `${res.itemsCount} items`}</p>
-                  </div>
-                  <ArrowUpRight size={16} className="text-outline-variant flex-shrink-0" />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-
-      {/* Feedback */}
-      {courseFeedback.length > 0 && (
-        <section className="mt-8">
-          <h2 className="text-lg font-black text-on-surface mb-4 flex items-center gap-2">
-            <MessageSquare size={20} className="text-primary" /> Tutor Feedback
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {courseFeedback.map(item => (
-              <div key={item.id} className="p-5 bg-tertiary-container/30 rounded-3xl border border-tertiary/10">
-                <div className="flex justify-between items-start mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-tertiary/10 flex items-center justify-center text-tertiary">
-                      <User size={16} />
-                    </div>
-                    <span className="text-xs font-bold text-tertiary">{item.tutor}</span>
-                  </div>
-                  <span className="text-[10px] text-tertiary/60 font-medium">{item.date}</span>
-                </div>
-                <p className="text-sm text-tertiary/80 italic leading-relaxed">"{item.text}"</p>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+            )}
+
+            {/* Videos from posts */}
+            {(() => {
+              const allVideos = coursePosts.flatMap(p => p.items.filter(it => it.type === 'video' && toYouTubeEmbed(it.url ?? '')));
+              if (allVideos.length === 0) return null;
+              return (
+                <div>
+                  <h2 className="text-xl font-black text-on-surface mb-5">Videos</h2>
+                  <div className="space-y-6">
+                    {allVideos.map((item, i) => (
+                      <div key={i}>
+                        {item.label && <p className="text-sm font-bold text-on-surface mb-2">{item.label}</p>}
+                        <div className="rounded-2xl overflow-hidden aspect-video w-full">
+                          <iframe src={toYouTubeEmbed(item.url!)!} className="w-full h-full" allowFullScreen />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Files from posts */}
+            {(() => {
+              const allFiles = coursePosts.flatMap(p => p.items.filter(it => it.type === 'file'));
+              if (allFiles.length === 0) return null;
+              return (
+                <div>
+                  <h2 className="text-xl font-black text-on-surface mb-5">Files</h2>
+                  <div className="space-y-2">
+                    {allFiles.map((item, i) => (
+                      <div key={i} className="flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/20">
+                        {fileIconForType(item.fileType ?? '')}
+                        <span className="text-sm font-semibold text-on-surface truncate flex-1">{item.fileName}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Links from posts */}
+            {(() => {
+              const allLinks = coursePosts.flatMap(p => p.items.filter(it => it.type === 'link'));
+              if (allLinks.length === 0) return null;
+              return (
+                <div>
+                  <h2 className="text-xl font-black text-on-surface mb-5">Links</h2>
+                  <div className="space-y-2">
+                    {allLinks.map((item, i) => (
+                      <a
+                        key={i}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-3 px-4 py-3 bg-primary/8 border border-primary/20 rounded-xl hover:bg-primary/15 transition-colors group"
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+                          <ExternalLink size={14} className="text-on-primary" />
+                        </div>
+                        <span className="text-sm font-bold text-primary group-hover:underline truncate flex-1">{item.label ?? item.url}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {courseResources.length === 0 && coursePosts.every(p => p.items.length === 0) && (
+              <p className="text-on-surface-variant italic py-8 text-center">No content published for this course yet.</p>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
+  );
+};
+
+const PracticeQuestion = ({ question, answer, index }: { question: string; answer: string; index: number }) => {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div className="py-3 border-b border-outline-variant/10 last:border-0">
+      <div className="flex items-start gap-3 mb-2">
+        <span className="text-xs font-black text-on-surface-variant/40 w-5 flex-shrink-0 mt-0.5">{index}.</span>
+        <p className="text-sm font-semibold text-on-surface flex-1 leading-relaxed">{question}</p>
+      </div>
+      {!revealed ? (
+        <div className="pl-8">
+          <button onClick={() => setRevealed(true)} className="text-xs font-bold text-primary flex items-center gap-1 hover:underline">
+            <Eye size={12} /> Reveal Answer
+          </button>
+        </div>
+      ) : (
+        <div className="pl-8">
+          <p className="text-sm text-on-surface-variant leading-relaxed">{answer}</p>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1460,757 +1577,6 @@ const TutorAnalytics = () => {
               </div>
             </motion.div>
           </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-};
-
-const TutorSchedule = () => {
-  const { sessions, students, courses, availability, setAvailability, addSession, updateSession, deleteSession, tutors, currentUserEmail } = useData();
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [scheduleView, setScheduleView] = useState<'mine' | 'team'>('mine');
-
-  // Booking/edit modal
-  const [sessionModal, setSessionModal] = useState<'new' | 'edit' | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<{ date: Date; time: string } | null>(null);
-  const [editingSession, setEditingSession] = useState<Session | null>(null);
-  const [bookingData, setBookingData] = useState({
-    studentId: '',
-    courseId: '',
-    tutorName: '',
-    title: '',
-    description: '',
-    duration: 60,
-    modality: 'online' as 'online' | 'in-person',
-    location: '',
-    date: '',
-    time: '',
-    recurrence: 'none' as 'none' | 'daily' | 'weekdays' | 'weekly' | 'biweekly' | 'monthly',
-    occurrences: 1,
-  });
-
-  // Block time modal
-  const [blockModal, setBlockModal] = useState(false);
-  const [blockData, setBlockData] = useState({
-    recurrence: 'weekly' as 'once' | 'weekly' | 'weekdays',
-    selectedDays: [1, 2, 3, 4, 5] as number[],
-    date: '',
-    startTime: '09:00',
-    endTime: '10:00',
-  });
-
-  const currentTutorName = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
-
-  const weekStart = startOfWeek(currentDate);
-  const weekDays = Array.from({ length: 7 }).map((_, i) => addDays(weekStart, i));
-  const hours = Array.from({ length: 14 }).map((_, i) => i + 8); // 8 AM - 9 PM
-
-  // Filter sessions by My/Team view
-  const visibleSessions = scheduleView === 'mine'
-    ? sessions.filter(s => !s.tutor || s.tutor === currentTutorName || !currentTutorName)
-    : sessions;
-
-  const isUnavailable = (date: Date, hour: number): boolean => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const dayOfWeek = date.getDay();
-    return availability.some(a => {
-      const startH = parseInt(a.startTime.split(':')[0]);
-      const endH = parseInt(a.endTime.split(':')[0]);
-      if (hour < startH || hour >= endH) return false;
-      if (a.specificDate) return a.specificDate === dateStr;
-      if (a.dayOfWeek !== undefined) return a.dayOfWeek === dayOfWeek;
-      return false;
-    });
-  };
-
-  const generateRecurringDates = (startDate: Date, recurrence: string, occurrences: number): Date[] => {
-    if (recurrence === 'none') return [startDate];
-    const dates: Date[] = [startDate];
-    if (recurrence === 'daily') {
-      for (let i = 1; i < occurrences; i++) dates.push(addDays(startDate, i));
-    } else if (recurrence === 'weekdays') {
-      let d = addDays(startDate, 1);
-      while (dates.length < occurrences) {
-        if (d.getDay() !== 0 && d.getDay() !== 6) dates.push(d);
-        d = addDays(d, 1);
-      }
-    } else if (recurrence === 'weekly') {
-      for (let i = 1; i < occurrences; i++) dates.push(addWeeks(startDate, i));
-    } else if (recurrence === 'biweekly') {
-      for (let i = 1; i < occurrences; i++) dates.push(addWeeks(startDate, i * 2));
-    } else if (recurrence === 'monthly') {
-      for (let i = 1; i < occurrences; i++) dates.push(addMonths(startDate, i));
-    }
-    return dates;
-  };
-
-  const getSessionAt = (date: Date, hour: number): Session | undefined => {
-    return visibleSessions.find(s => {
-      let sessionDate: Date | null = null;
-      // Try ISO format (yyyy-MM-dd) first
-      const isoMatch = s.date.match(/^\d{4}-\d{2}-\d{2}/);
-      if (isoMatch) {
-        const d = new Date(s.date + (s.date.length === 10 ? 'T12:00:00' : ''));
-        if (!isNaN(d.getTime())) sessionDate = d;
-      } else {
-        // Parse "EEEE, MMM d" format e.g. "Monday, Apr 7"
-        const parts = s.date.split(', ');
-        const dateStr = parts.length > 1 ? parts[1] : s.date;
-        try {
-          const parsed = parse(`${dateStr} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date());
-          if (!isNaN(parsed.getTime())) sessionDate = parsed;
-        } catch { /* ignore */ }
-      }
-      if (!sessionDate || !isSameDay(sessionDate, date)) return false;
-      const [timePart, ampm] = s.time.split(' ');
-      const [sHourStr] = timePart.split(':');
-      let sHour = parseInt(sHourStr);
-      if (ampm === 'PM' && sHour !== 12) sHour += 12;
-      if (ampm === 'AM' && sHour === 12) sHour = 0;
-      return sHour === hour;
-    });
-  };
-
-  const openNewBooking = (date: Date, hour: number) => {
-    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
-    setSelectedSlot({ date, time: timeStr });
-    setEditingSession(null);
-    setBookingData({
-      studentId: '',
-      courseId: '',
-      tutorName: currentTutorName,
-      title: '',
-      description: '',
-      duration: 60,
-      modality: 'online',
-      location: '',
-      date: format(date, 'yyyy-MM-dd'),
-      time: timeStr,
-      recurrence: 'none',
-      occurrences: 1,
-    });
-    setSessionModal('new');
-  };
-
-  const openEditSession = (session: Session) => {
-    setEditingSession(session);
-    setSessionModal('edit');
-    setBookingData({
-      studentId: session.studentId ?? '',
-      courseId: session.courseId ?? '',
-      tutorName: session.tutor ?? '',
-      title: session.title,
-      description: session.description ?? '',
-      duration: session.duration,
-      modality: session.modality,
-      location: session.location ?? '',
-      date: (() => {
-        const isoMatch = session.date.match(/^\d{4}-\d{2}-\d{2}/);
-        if (isoMatch) return session.date.slice(0, 10);
-        const parts = session.date.split(', ');
-        const dateStr = parts.length > 1 ? parts[1] : session.date;
-        try { const p = parse(`${dateStr} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date()); return !isNaN(p.getTime()) ? format(p, 'yyyy-MM-dd') : ''; } catch { return ''; }
-      })(),
-      time: (() => {
-        const [timePart, ampm] = session.time.split(' ');
-        if (!ampm) return session.time;
-        const [hStr, mStr] = timePart.split(':');
-        let h = parseInt(hStr);
-        if (ampm === 'PM' && h !== 12) h += 12;
-        if (ampm === 'AM' && h === 12) h = 0;
-        return `${h.toString().padStart(2, '0')}:${mStr || '00'}`;
-      })(),
-      recurrence: 'none',
-      occurrences: 1,
-    });
-  };
-
-  const handleSlotClick = (date: Date, hour: number) => {
-    const session = getSessionAt(date, hour);
-    if (session) {
-      openEditSession(session);
-    } else if (!isUnavailable(date, hour)) {
-      openNewBooking(date, hour);
-    }
-  };
-
-  const handleBookingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const startDate = bookingData.date ? new Date(bookingData.date + 'T12:00:00') : (selectedSlot?.date ?? new Date());
-    const timeDisplay = (() => {
-      const [h, m] = bookingData.time.split(':').map(Number);
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const displayH = h > 12 ? h - 12 : h === 0 ? 12 : h;
-      return `${displayH}:${(m || 0).toString().padStart(2, '0')} ${ampm}`;
-    })();
-
-    const makePayload = (dateObj: Date) => ({
-      studentId: bookingData.studentId || undefined,
-      courseId: bookingData.courseId || undefined,
-      title: bookingData.title || (courses.find(c => c.id === bookingData.courseId)?.title ?? 'Tutoring Session'),
-      tutor: bookingData.tutorName,
-      date: format(dateObj, 'yyyy-MM-dd'),
-      time: timeDisplay,
-      duration: bookingData.duration,
-      status: 'upcoming' as const,
-      type: 'both' as const,
-      modality: bookingData.modality,
-      location: bookingData.location || undefined,
-      description: bookingData.description || undefined,
-    });
-
-    if (sessionModal === 'edit' && editingSession) {
-      await updateSession(editingSession.id, makePayload(startDate));
-    } else {
-      const dates = generateRecurringDates(startDate, bookingData.recurrence, bookingData.occurrences);
-      for (const d of dates) await addSession(makePayload(d));
-    }
-
-    setSessionModal(null);
-    setEditingSession(null);
-  };
-
-  const handleBlockSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newBlocks: import('./types').Availability[] = [];
-    if (blockData.recurrence === 'once') {
-      if (blockData.date) {
-        newBlocks.push({ id: crypto.randomUUID(), specificDate: blockData.date, startTime: blockData.startTime, endTime: blockData.endTime });
-      }
-    } else {
-      const days = blockData.recurrence === 'weekdays' ? [1, 2, 3, 4, 5] : blockData.selectedDays;
-      days.forEach(day => {
-        newBlocks.push({ id: crypto.randomUUID(), dayOfWeek: day, startTime: blockData.startTime, endTime: blockData.endTime });
-      });
-    }
-    setAvailability([...availability, ...newBlocks]);
-    setBlockModal(false);
-  };
-
-  const handleDeleteSession = async () => {
-    if (!editingSession) return;
-    if (!window.confirm('Delete this session?')) return;
-    await deleteSession(editingSession.id);
-    setSessionModal(null);
-    setEditingSession(null);
-  };
-
-  const handleMarkCompleted = async () => {
-    if (!editingSession) return;
-    await updateSession(editingSession.id, { status: 'completed' });
-    setSessionModal(null);
-    setEditingSession(null);
-  };
-
-  // Tutor color map for team view
-  const tutorColors = ['bg-primary', 'bg-secondary', 'bg-tertiary', 'bg-amber-500', 'bg-rose-500', 'bg-violet-500'];
-  const tutorColorMap = Object.fromEntries(
-    tutors.map((t: import('./types').Tutor, i: number) => [t.name, tutorColors[i % tutorColors.length]])
-  );
-  const getSessionColor = (session: Session) => {
-    if (scheduleView === 'team' && session.tutor) {
-      return tutorColorMap[session.tutor] ?? 'bg-primary';
-    }
-    return 'bg-primary';
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.98 }}
-      className="max-w-7xl mx-auto"
-    >
-      <Header title="Manage Schedule" />
-
-      {/* Top controls */}
-      <div className="flex flex-wrap items-center gap-3 mb-8">
-        {/* My / Team toggle */}
-        <div className="flex items-center gap-1 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5">
-          {([
-            { id: 'mine', label: 'My Schedule' },
-            { id: 'team', label: 'Team Schedule' },
-          ] as const).map(opt => (
-            <button
-              key={opt.id}
-              onClick={() => setScheduleView(opt.id)}
-              className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${scheduleView === opt.id ? 'bg-primary text-on-primary shadow-md' : 'text-on-surface-variant hover:text-on-surface'}`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <button
-          onClick={() => setBlockModal(true)}
-          className="px-5 py-2 rounded-2xl text-sm font-bold transition-all flex items-center gap-2 bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border border-rose-200"
-        >
-          <X size={14} /> Block Time
-        </button>
-
-        <button
-          onClick={() => setCurrentDate(new Date())}
-          className="px-4 py-2 bg-primary/10 text-primary rounded-2xl font-bold text-sm hover:bg-primary/20 transition-all"
-        >
-          Today
-        </button>
-
-        <div className="flex items-center gap-2 ml-auto">
-          <button onClick={() => setCurrentDate(subWeeks(currentDate, 1))} className="p-2 hover:bg-surface-container-high rounded-xl transition-all"><ChevronLeft size={20} /></button>
-          <span className="text-sm font-bold text-on-surface min-w-max">Week of {format(weekStart, 'MMM d, yyyy')}</span>
-          <button onClick={() => setCurrentDate(addWeeks(currentDate, 1))} className="p-2 hover:bg-surface-container-high rounded-xl transition-all"><ChevronRight size={20} /></button>
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Sidebar */}
-        <div className="lg:w-72 space-y-6 flex-shrink-0">
-          {/* Mini calendar */}
-          <div className="bg-surface-container-low rounded-[32px] p-6 border border-outline-variant/30">
-            <div className="flex items-center justify-between mb-4">
-              <span className="font-black text-on-surface">{format(currentDate, 'MMMM yyyy')}</span>
-              <div className="flex gap-1">
-                <button onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-all"><ChevronLeft size={16} /></button>
-                <button onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="p-1.5 hover:bg-surface-container-high rounded-lg transition-all"><ChevronRight size={16} /></button>
-              </div>
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center mb-2">
-              {['S','M','T','W','T','F','S'].map((d,i) => <span key={i} className="text-[10px] font-black text-on-surface-variant/50">{d}</span>)}
-            </div>
-            <div className="grid grid-cols-7 gap-1 text-center">
-              {eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) }).map((day, i) => (
-                <button key={i} onClick={() => setCurrentDate(day)}
-                  className={`aspect-square rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
-                    isSameDay(day, currentDate) ? 'bg-primary text-on-primary shadow-md' :
-                    isToday(day) ? 'bg-primary/15 text-primary' : 'hover:bg-surface-container-high text-on-surface'
-                  }`}>
-                  {format(day, 'd')}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="bg-surface-container-low rounded-[32px] p-6 border border-outline-variant/30">
-            <p className="text-xs font-black text-on-surface-variant uppercase tracking-widest mb-4">Legend</p>
-            <div className="space-y-3">
-              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                <div className="w-5 h-5 rounded-md bg-surface-container-lowest border-2 border-outline-variant/40"></div>
-                Free — click to book
-              </div>
-              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                <div className="w-5 h-5 rounded-md bg-rose-200 border-2 border-rose-400"></div>
-                Blocked / Unavailable
-              </div>
-              <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                <div className="w-5 h-5 rounded-md bg-primary shadow-sm"></div>
-                Session Booked
-              </div>
-              {scheduleView === 'team' && tutors.slice(0, 4).map((t: import('./types').Tutor, i: number) => (
-                <div key={t.id} className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
-                  <div className={`w-5 h-5 rounded-md ${tutorColors[i % tutorColors.length]} shadow-sm`}></div>
-                  {t.name}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-secondary/5 border border-secondary/20 rounded-[32px] p-5 text-sm font-semibold text-secondary">
-            Click any free slot to book a session. Click an existing session to edit it.
-          </div>
-
-          {/* Active blocks list */}
-          {availability.length > 0 && (
-            <div className="bg-surface-container-low rounded-[32px] p-6 border border-outline-variant/30">
-              <p className="text-xs font-black text-on-surface-variant uppercase tracking-widest mb-3">Blocked Times</p>
-              <div className="space-y-2">
-                {availability.map(a => (
-                  <div key={a.id} className="flex items-center justify-between gap-2 bg-rose-50 rounded-xl px-3 py-2">
-                    <div>
-                      <p className="text-xs font-bold text-rose-700">
-                        {a.specificDate
-                          ? a.specificDate
-                          : ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][a.dayOfWeek ?? 0] + ' (weekly)'}
-                      </p>
-                      <p className="text-[10px] text-rose-500">{a.startTime} – {a.endTime}</p>
-                    </div>
-                    <button onClick={() => setAvailability(availability.filter(x => x.id !== a.id))} className="text-rose-400 hover:text-rose-600 transition-colors flex-shrink-0">
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Weekly Grid */}
-        <div className="flex-1 bg-surface-container-low rounded-[32px] border border-outline-variant/30 overflow-hidden">
-          <div className="overflow-auto max-h-[75vh]">
-            <div className="min-w-[700px]">
-              {/* Day headers */}
-              <div className="grid grid-cols-8 border-b border-outline-variant/20 sticky top-0 z-10 bg-surface-container-high">
-                <div className="p-3 border-r border-outline-variant/20 text-[10px] text-on-surface-variant/50 text-right pr-3 self-end pb-2">Time</div>
-                {weekDays.map(day => (
-                  <div key={day.toString()}
-                    className={`p-3 text-center border-r border-outline-variant/20 ${isToday(day) ? 'bg-primary/5' : ''}`}
-                    onClick={() => setCurrentDate(day)}>
-                    <p className="text-[10px] font-black text-on-surface-variant uppercase tracking-widest">{format(day, 'EEE')}</p>
-                    <p className={`text-xl font-black ${isToday(day) ? 'text-primary' : 'text-on-surface'}`}>{format(day, 'd')}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* Time rows */}
-              {hours.map(hour => (
-                <div key={hour} className="grid grid-cols-8 border-b border-outline-variant/10 h-16">
-                  <div className="p-2 text-[10px] font-bold text-on-surface-variant/60 text-right border-r border-outline-variant/20 flex items-start justify-end pt-2">
-                    {hour > 12 ? `${hour - 12} PM` : hour === 12 ? '12 PM' : `${hour} AM`}
-                  </div>
-                  {weekDays.map(day => {
-                    const unavailable = isUnavailable(day, hour);
-                    const session = getSessionAt(day, hour);
-                    const showUnavailable = unavailable && scheduleView === 'mine';
-                    return (
-                      <div
-                        key={`${day}-${hour}`}
-                        onClick={() => handleSlotClick(day, hour)}
-                        className={`relative border-r border-outline-variant/10 cursor-pointer transition-all ${
-                          showUnavailable
-                            ? 'bg-rose-100 hover:bg-rose-200'
-                            : session
-                            ? ''
-                            : 'hover:bg-primary/10 hover:border-primary/20'
-                        }`}
-                      >
-                        {session && (
-                          <div
-                            className={`absolute left-1 right-1 top-1 ${getSessionColor(session)} text-white rounded-xl p-2 shadow-lg z-20 overflow-hidden hover:opacity-90 transition-opacity`}
-                            style={{ height: `${Math.max((session.duration / 60) * 64 - 8, 20)}px` }}
-                          >
-                            <p className="text-[10px] font-black truncate">{session.title}</p>
-                            <p className="text-[9px] opacity-80 truncate">{session.time} · {session.duration >= 60 ? `${session.duration / 60}h` : `${session.duration}m`}</p>
-                            {scheduleView === 'team' && session.tutor && (
-                              <p className="text-[9px] opacity-70 truncate">{session.tutor}</p>
-                            )}
-                          </div>
-                        )}
-                        {showUnavailable && !session && (
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                            <div className="w-full h-full opacity-30" style={{
-                              backgroundImage: 'repeating-linear-gradient(45deg, #f43f5e 0, #f43f5e 1px, transparent 0, transparent 50%)',
-                              backgroundSize: '8px 8px',
-                            }} />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Book / Edit Session Modal */}
-      <AnimatePresence>
-        {sessionModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setSessionModal(null)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
-            >
-              <div className="p-7 border-b border-outline-variant/20 bg-surface-container-high flex items-center justify-between flex-shrink-0">
-                <div>
-                  <h3 className="text-xl font-black text-on-surface">{sessionModal === 'edit' ? 'Edit Session' : 'Book New Session'}</h3>
-                  {selectedSlot && sessionModal === 'new' && (
-                    <p className="text-xs text-on-surface-variant mt-1">
-                      {format(selectedSlot.date, 'EEEE, MMMM d')} at {selectedSlot.time}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {sessionModal === 'edit' && editingSession?.status === 'upcoming' && (
-                    <button
-                      type="button"
-                      onClick={handleMarkCompleted}
-                      title="Mark as completed"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-green-600 bg-green-50 hover:bg-green-100 text-xs font-black uppercase tracking-wider transition-colors border border-green-200"
-                    >
-                      <CheckCircle2 size={15} /> Completed
-                    </button>
-                  )}
-                  {sessionModal === 'edit' && (
-                    <button onClick={handleDeleteSession} className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors">
-                      <Trash2 size={18} />
-                    </button>
-                  )}
-                  <button onClick={() => setSessionModal(null)} className="p-2 rounded-xl hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
-                </div>
-              </div>
-
-              <form onSubmit={handleBookingSubmit} className="p-7 space-y-5 overflow-y-auto">
-                {/* Date & Time */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Date</label>
-                    <input type="date" required value={bookingData.date}
-                      onChange={e => setBookingData(p => ({ ...p, date: e.target.value }))}
-                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Time</label>
-                    <input type="time" required value={bookingData.time}
-                      onChange={e => setBookingData(p => ({ ...p, time: e.target.value }))}
-                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
-                  </div>
-                </div>
-
-                {/* Duration */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Duration (minutes)</label>
-                  <input
-                    type="number"
-                    min={15}
-                    max={480}
-                    step={5}
-                    required
-                    value={bookingData.duration}
-                    onChange={e => setBookingData(p => ({ ...p, duration: parseInt(e.target.value) || 60 }))}
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
-                  />
-                </div>
-
-                {/* Recurrence */}
-                {sessionModal === 'new' && (
-                  <div className="space-y-3">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Repeat</label>
-                      <select value={bookingData.recurrence}
-                        onChange={e => setBookingData(p => ({ ...p, recurrence: e.target.value as typeof bookingData.recurrence, occurrences: 1 }))}
-                        className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
-                        <option value="none">Does not repeat</option>
-                        <option value="daily">Every day</option>
-                        <option value="weekdays">Every weekday (Mon–Fri)</option>
-                        <option value="weekly">Every week</option>
-                        <option value="biweekly">Every 2 weeks</option>
-                        <option value="monthly">Every month</option>
-                      </select>
-                    </div>
-                    {bookingData.recurrence !== 'none' && (
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Number of occurrences</label>
-                        <input type="number" min={2} max={52} required value={bookingData.occurrences}
-                          onChange={e => setBookingData(p => ({ ...p, occurrences: parseInt(e.target.value) || 2 }))}
-                          className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Tutor */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Tutor</label>
-                  <select required value={bookingData.tutorName}
-                    onChange={e => setBookingData(p => ({ ...p, tutorName: e.target.value }))}
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
-                    <option value="">Select tutor</option>
-                    {tutors.map((t: import('./types').Tutor) => (
-                      <option key={t.id} value={t.name}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Student */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Student</label>
-                  <select value={bookingData.studentId}
-                    onChange={e => setBookingData(p => ({ ...p, studentId: e.target.value, courseId: '' }))}
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
-                    <option value="">Select student (optional)</option>
-                    {students.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Course — filtered by enrolled student */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Course</label>
-                  <select value={bookingData.courseId}
-                    onChange={e => setBookingData(p => ({ ...p, courseId: e.target.value }))}
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm appearance-none">
-                    <option value="">Select course (optional)</option>
-                    {(bookingData.studentId
-                      ? courses.filter(c => students.find(s => s.id === bookingData.studentId)?.enrolledCourseIds.includes(c.id))
-                      : courses
-                    ).map(c => (
-                      <option key={c.id} value={c.id}>{c.title}</option>
-                    ))}
-                  </select>
-                  {bookingData.studentId && courses.filter(c => students.find(s => s.id === bookingData.studentId)?.enrolledCourseIds.includes(c.id)).length === 0 && (
-                    <p className="text-[10px] text-amber-500 ml-1">This student is not enrolled in any courses.</p>
-                  )}
-                </div>
-
-                {/* Title */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Session Title</label>
-                  <input type="text" value={bookingData.title}
-                    onChange={e => setBookingData(p => ({ ...p, title: e.target.value }))}
-                    placeholder="e.g. Exam Prep, Chapter 5 Review"
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Description (Optional)</label>
-                  <textarea value={bookingData.description} rows={3}
-                    onChange={e => setBookingData(p => ({ ...p, description: e.target.value }))}
-                    placeholder="Topics to cover, goals for this session..."
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none" />
-                </div>
-
-                {/* Modality */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Location Type</label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {([
-                      { id: 'online', label: 'Virtual', hint: 'Zoom, Teams, etc.' },
-                      { id: 'in-person', label: 'In Person', hint: 'Physical location' },
-                    ] as const).map(opt => (
-                      <button key={opt.id} type="button"
-                        onClick={() => setBookingData(p => ({ ...p, modality: opt.id }))}
-                        className={`p-3 rounded-2xl border-2 text-left transition-all ${bookingData.modality === opt.id ? 'bg-primary/5 border-primary text-primary' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
-                        <p className="text-sm font-bold">{opt.label}</p>
-                        <p className="text-[10px] opacity-60 mt-0.5">{opt.hint}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Location */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">
-                    {bookingData.modality === 'online' ? 'Meeting Link' : 'Address / Room'}
-                  </label>
-                  <input type="text" value={bookingData.location}
-                    onChange={e => setBookingData(p => ({ ...p, location: e.target.value }))}
-                    placeholder={bookingData.modality === 'online' ? 'https://zoom.us/...' : '123 Main St, Room 4B'}
-                    className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setSessionModal(null)}
-                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all text-sm">
-                    Cancel
-                  </button>
-                  <button type="submit"
-                    className="flex-1 py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all text-sm">
-                    {sessionModal === 'edit' ? 'Save Changes' : 'Confirm Booking'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Block Time Modal */}
-      <AnimatePresence>
-        {blockModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setBlockModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
-            >
-              <div className="p-7 border-b border-outline-variant/20 bg-surface-container-high flex items-center justify-between">
-                <h3 className="text-xl font-black text-on-surface">Block Time</h3>
-                <button onClick={() => setBlockModal(false)} className="p-2 rounded-xl hover:bg-surface-container-highest transition-colors"><X size={20} /></button>
-              </div>
-              <form onSubmit={handleBlockSubmit} className="p-7 space-y-5">
-                {/* Recurrence type */}
-                <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Repeat</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {([
-                      { id: 'once', label: 'One time' },
-                      { id: 'weekly', label: 'Weekly' },
-                      { id: 'weekdays', label: 'Weekdays' },
-                    ] as const).map(opt => (
-                      <button key={opt.id} type="button"
-                        onClick={() => setBlockData(p => ({ ...p, recurrence: opt.id, selectedDays: opt.id === 'weekdays' ? [1,2,3,4,5] : p.selectedDays }))}
-                        className={`py-2.5 rounded-2xl text-sm font-bold border-2 transition-all ${blockData.recurrence === opt.id ? 'bg-rose-500/10 border-rose-500 text-rose-600' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Day picker for weekly */}
-                {blockData.recurrence === 'weekly' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Days</label>
-                    <div className="flex gap-2 flex-wrap">
-                      {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => (
-                        <button key={i} type="button"
-                          onClick={() => setBlockData(p => ({
-                            ...p,
-                            selectedDays: p.selectedDays.includes(i)
-                              ? p.selectedDays.filter(x => x !== i)
-                              : [...p.selectedDays, i],
-                          }))}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-all ${blockData.selectedDays.includes(i) ? 'bg-rose-500/10 border-rose-500 text-rose-600' : 'border-outline-variant/20 text-on-surface-variant hover:border-outline-variant/50'}`}>
-                          {d}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Specific date for one-time */}
-                {blockData.recurrence === 'once' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Date</label>
-                    <input type="date" required value={blockData.date}
-                      onChange={e => setBlockData(p => ({ ...p, date: e.target.value }))}
-                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-sm" />
-                  </div>
-                )}
-
-                {/* Time range */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Start Time</label>
-                    <input type="time" required value={blockData.startTime}
-                      onChange={e => setBlockData(p => ({ ...p, startTime: e.target.value }))}
-                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-sm" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">End Time</label>
-                    <input type="time" required value={blockData.endTime}
-                      onChange={e => setBlockData(p => ({ ...p, endTime: e.target.value }))}
-                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-sm" />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setBlockModal(false)}
-                    className="flex-1 py-4 bg-surface-container-high text-on-surface font-bold rounded-2xl hover:bg-surface-container-highest transition-all text-sm">
-                    Cancel
-                  </button>
-                  <button type="submit"
-                    className="flex-1 py-4 bg-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-rose-500/20 hover:shadow-rose-500/40 transition-all text-sm">
-                    Block Time
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
         )}
       </AnimatePresence>
     </motion.div>
@@ -2652,201 +2018,152 @@ const Profile = () => {
 };
 
 const TutorDashboard = () => {
-  const { courses, sessions, students, tutors, currentUserEmail } = useData();
-  const [expandedSession, setExpandedSession] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
-
-  const currentTutorName = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
-
-  const parseSessionDate = (dateStr: string): Date | null => {
-    // Try ISO format first (yyyy-MM-dd)
-    const isoMatch = dateStr.match(/^\d{4}-\d{2}-\d{2}/);
-    if (isoMatch) {
-      const d = new Date(dateStr.length === 10 ? dateStr + 'T12:00:00' : dateStr);
-      if (!isNaN(d.getTime())) return d;
-    }
-    // Parse "EEEE, MMM d" e.g. "Friday, Apr 10"
-    const parts = dateStr.split(', ');
-    const datePart = parts.length > 1 ? parts[1] : parts[0];
-    try {
-      const d = parse(`${datePart} ${new Date().getFullYear()}`, 'MMM d yyyy', new Date());
-      if (!isNaN(d.getTime())) return d;
-    } catch { /* ignore */ }
-    return null;
-  };
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const upcomingSessions = sessions
-    .filter(s => { const d = parseSessionDate(s.date); return d ? d >= today : s.status === 'upcoming'; })
-    .sort((a, b) => { const da = parseSessionDate(a.date); const db = parseSessionDate(b.date); return da && db ? da.getTime() - db.getTime() : 0; });
-
-  const pastSessions = sessions
-    .filter(s => { const d = parseSessionDate(s.date); return d ? d < today : s.status === 'completed'; })
-    .sort((a, b) => { const da = parseSessionDate(a.date); const db = parseSessionDate(b.date); return da && db ? db.getTime() - da.getTime() : 0; });
+  const { courses, students, tutors, currentUserEmail, contentPosts } = useData();
+  const navigate = useNavigate();
 
   const currentTutor = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail);
-  const myStudentIds = new Set(
-    students
-      .filter(s => currentTutor && (s.assignedTutorIds ?? []).includes(currentTutor.id))
-      .map(s => s.id)
+  const currentTutorName = currentTutor?.name ?? '';
+
+  const myCourses = courses.filter(c =>
+    (c.tutor || '').split(',').map(s => s.trim()).includes(currentTutorName)
   );
 
-  const getStudentName = (studentId?: string) =>
-    studentId ? (students.find((s: import('./types').Student) => s.id === studentId)?.name ?? 'Unknown') : 'Unassigned';
+  const myStudents = students.filter(s =>
+    currentTutor && (s.assignedTutorIds ?? []).includes(currentTutor.id)
+  );
 
-  const getLocationDisplay = (session: import('./types').Session) => {
-    if (session.modality === 'online') {
-      const loc = (session.location || '').toLowerCase();
-      if (loc.includes('zoom')) return 'Zoom';
-      if (loc.includes('teams')) return 'Microsoft Teams';
-      if (loc.includes('meet')) return 'Google Meet';
-      if (session.location) return session.location;
-      return 'Virtual';
-    }
-    return session.location || 'TBD';
-  };
+  const myPostsCount = contentPosts.filter(cp =>
+    cp.tutorEmail === currentUserEmail && cp.status === 'published'
+  ).length;
 
-  const stats = [
-    { label: 'Total Students', value: students.length, icon: Users, color: 'text-blue-600', bg: 'bg-blue-100' },
-    { label: 'My Students', value: myStudentIds.size, icon: UserCheck, color: 'text-green-600', bg: 'bg-green-100' },
-    { label: 'Tutors', value: tutors.length, icon: GraduationCap, color: 'text-purple-600', bg: 'bg-purple-100' },
-    { label: 'Courses', value: courses.length, icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-100' },
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const todayStr = format(new Date(), 'EEEE, MMMM d');
+
+  const quickActions = [
+    { icon: Users, label: 'Add Student', description: 'Enroll or invite a new student', color: 'bg-blue-100 text-blue-600', path: '/students' },
+    { icon: FilePlus, label: 'Create Post', description: 'Pick a student → their course → post', color: 'bg-green-100 text-green-600', path: '/students' },
+    { icon: BarChart3, label: 'View Analytics', description: 'Track earnings and progress', color: 'bg-purple-100 text-purple-600', path: '/analytics' },
   ];
-
-  const renderCards = (list: import('./types').Session[]) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {list.map(session => {
-        const parts = session.date.split(',');
-        const monthDay = (parts[1] || parts[0] || '').trim().split(' ');
-        const monthAbbr = monthDay[0] ?? '';
-        const dayNum = monthDay[1] ?? '';
-        const isExpanded = expandedSession === session.id;
-        return (
-          <div key={session.id} className="p-5 bg-surface-container-low rounded-3xl border border-outline-variant/30 shadow-sm hover:shadow-md transition-all">
-            <div className="flex items-start gap-4">
-              <div className="w-14 h-14 bg-surface-container-high rounded-2xl flex flex-col items-center justify-center shrink-0">
-                <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-tighter">{monthAbbr}</span>
-                <span className="text-lg font-black text-on-surface">{dayNum}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <h5 className="font-bold text-on-surface truncate">{session.title}</h5>
-                <p className="text-sm text-on-surface-variant mt-0.5">{getStudentName(session.studentId)} • {session.time}</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  {session.modality === 'online'
-                    ? <Globe size={11} className="text-blue-500 shrink-0" />
-                    : <MapPin size={11} className="text-orange-500 shrink-0" />}
-                  <span className="text-xs text-on-surface-variant">{getLocationDisplay(session)}</span>
-                </div>
-              </div>
-              <button
-                onClick={() => setExpandedSession(isExpanded ? null : session.id)}
-                className="shrink-0 p-2 rounded-xl bg-surface-container-high hover:bg-primary/10 text-on-surface-variant hover:text-primary transition-colors"
-                title={isExpanded ? 'Collapse' : 'Expand'}
-              >
-                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </button>
-            </div>
-            {isExpanded && (
-              <div className="mt-4 pt-4 border-t border-outline-variant/20 grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Day</p><p className="font-bold text-on-surface">{parts[0] ?? ''}</p></div>
-                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Duration</p><p className="font-bold text-on-surface">{session.duration} min</p></div>
-                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Modality</p><p className="font-bold text-on-surface capitalize">{session.modality}</p></div>
-                <div><p className="text-[10px] font-black uppercase tracking-widest text-on-surface-variant">Tutor</p><p className="font-bold text-on-surface">{session.tutor || 'TBD'}</p></div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-
-  const renderTable = (list: import('./types').Session[]) => (
-    <div className="bg-surface-container-low rounded-[24px] border border-outline-variant/30 overflow-hidden">
-      <table className="w-full text-left">
-        <thead>
-          <tr className="bg-surface-container-high">
-            {['Date', 'Session', 'Student', 'Time', 'Location', 'Modality'].map(h => (
-              <th key={h} className="px-5 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {list.map(session => (
-            <tr key={session.id} className="border-t border-outline-variant/20 hover:bg-surface-container-lowest transition-colors">
-              <td className="px-5 py-4 text-sm font-bold text-on-surface whitespace-nowrap">{session.date}</td>
-              <td className="px-5 py-4 text-sm text-on-surface">{session.title}</td>
-              <td className="px-5 py-4 text-sm text-on-surface-variant">{getStudentName(session.studentId)}</td>
-              <td className="px-5 py-4 text-sm text-on-surface-variant whitespace-nowrap">{session.time}</td>
-              <td className="px-5 py-4 text-sm text-on-surface-variant">{getLocationDisplay(session)}</td>
-              <td className="px-5 py-4">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${session.modality === 'online' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
-                  {session.modality}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-
-  const renderSessions = (list: import('./types').Session[]) => {
-    if (list.length === 0) return <p className="text-sm text-on-surface-variant py-2">No sessions found.</p>;
-    return viewMode === 'card' ? renderCards(list) : renderTable(list);
-  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-      <Header
-        title="Tutor Dashboard"
-        subtitle={`Welcome back${currentTutorName ? `, ${currentTutorName}` : ''}! Your students are waiting.`}
-      />
+      <Header title="Tutor Dashboard" />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-        {stats.map((stat, i) => (
-          <div key={i} className="bg-surface-container-low p-6 rounded-[32px] border border-outline-variant/30 shadow-sm">
-            <div className={`w-12 h-12 ${stat.bg} ${stat.color} rounded-2xl flex items-center justify-center mb-4`}>
-              <stat.icon size={24} />
-            </div>
-            <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">{stat.label}</p>
-            <h3 className="text-3xl font-black text-on-surface">{stat.value}</h3>
+      {/* Welcome card */}
+      <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-[32px] p-8 mb-6 border border-primary/10">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-2xl font-black text-on-surface mb-1">
+              {greeting}{currentTutorName ? `, ${currentTutorName}` : ''}!
+            </h2>
+            <p className="text-sm text-on-surface-variant">{todayStr}</p>
           </div>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <span className="bg-surface-container px-4 py-2 rounded-full text-sm font-bold text-on-surface">
+            {myStudents.length} {myStudents.length === 1 ? 'Student' : 'Students'}
+          </span>
+          <span className="bg-surface-container px-4 py-2 rounded-full text-sm font-bold text-on-surface">
+            {myCourses.length} {myCourses.length === 1 ? 'Course' : 'Courses'}
+          </span>
+          <span className="bg-surface-container px-4 py-2 rounded-full text-sm font-bold text-on-surface">
+            {myPostsCount} {myPostsCount === 1 ? 'Post' : 'Posts'} Published
+          </span>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        {quickActions.map((action, i) => (
+          <button
+            key={i}
+            onClick={() => navigate(action.path)}
+            className="bg-surface-container-low rounded-[28px] p-6 border border-outline-variant/30 cursor-pointer hover:bg-surface-container transition-colors flex items-center gap-4 text-left w-full"
+          >
+            <div className={`w-11 h-11 ${action.color} rounded-2xl flex items-center justify-center flex-shrink-0`}>
+              <action.icon size={22} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-black text-on-surface text-sm">{action.label}</p>
+              <p className="text-xs text-on-surface-variant truncate">{action.description}</p>
+            </div>
+            <ChevronRight size={18} className="text-on-surface-variant flex-shrink-0" />
+          </button>
         ))}
       </div>
 
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xl font-bold text-on-surface">Sessions</h4>
-          <div className="flex items-center gap-3">
-            <div className="flex bg-surface-container-high p-1 rounded-xl border border-outline-variant/20">
-              <button onClick={() => setViewMode('card')} className={`p-2 rounded-lg transition-all ${viewMode === 'card' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'}`} title="Card view">
-                <LayoutGrid size={16} />
-              </button>
-              <button onClick={() => setViewMode('table')} className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-white shadow-sm text-primary' : 'text-on-surface-variant hover:text-on-surface'}`} title="Table view">
-                <List size={16} />
-              </button>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* My Courses */}
+        <div className="bg-surface-container-low rounded-[28px] p-6 border border-outline-variant/30">
+          <h3 className="text-lg font-black text-on-surface mb-4">My Courses</h3>
+          {myCourses.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <BookOpen size={32} className="text-on-surface-variant/40 mb-2" />
+              <p className="text-sm text-on-surface-variant">No courses assigned yet.</p>
             </div>
-            <Link to="/schedule" className="text-sm font-bold text-primary hover:underline">View Schedule</Link>
-          </div>
+          ) : (
+            <div className="space-y-1">
+              {myCourses.map(course => {
+                const coursePosts = contentPosts.filter(cp => cp.courseId === course.id);
+                const latestPost = coursePosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+                const enrolledCount = students.filter(s => s.enrolledCourseIds.includes(course.id)).length;
+                return (
+                  <div key={course.id} className="flex items-center gap-3 py-3 border-b border-outline-variant/20 last:border-0">
+                    <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <BookOpen size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-on-surface truncate">{course.title}</p>
+                      <p className="text-xs text-on-surface-variant">
+                        {latestPost ? `Last post ${format(new Date(latestPost.createdAt), 'MMM d')}` : 'No posts yet'}
+                      </p>
+                    </div>
+                    <span className="text-xs bg-surface-container px-2.5 py-1 rounded-full font-semibold text-on-surface-variant flex-shrink-0">
+                      {enrolledCount} {enrolledCount === 1 ? 'student' : 'students'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <section>
-          <h5 className="text-base font-bold text-on-surface mb-4">
-            Upcoming Sessions
-            <span className="ml-2 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-bold">{upcomingSessions.length}</span>
-          </h5>
-          {renderSessions(upcomingSessions)}
-        </section>
-
-        <section>
-          <h5 className="text-base font-bold text-on-surface-variant mb-4">
-            Past Sessions
-            <span className="ml-2 px-2 py-0.5 bg-surface-container-high text-on-surface-variant rounded-full text-xs font-bold">{pastSessions.length}</span>
-          </h5>
-          {renderSessions(pastSessions)}
-        </section>
+        {/* My Students */}
+        <div className="bg-surface-container-low rounded-[28px] p-6 border border-outline-variant/30">
+          <h3 className="text-lg font-black text-on-surface mb-4">My Students</h3>
+          {myStudents.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <Users size={32} className="text-on-surface-variant/40 mb-2" />
+              <p className="text-sm text-on-surface-variant">No students assigned to you yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {myStudents.map(student => {
+                const enrolledCourseTitles = student.enrolledCourseIds
+                  .map(id => courses.find(c => c.id === id)?.title)
+                  .filter(Boolean)
+                  .join(', ');
+                return (
+                  <button
+                    key={student.id}
+                    onClick={() => navigate(`/students/${student.id}`)}
+                    className="flex items-center gap-3 py-3 border-b border-outline-variant/20 last:border-0 w-full text-left hover:bg-surface-container rounded-xl px-2 -mx-2 transition-colors"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">
+                      {student.name[0]?.toUpperCase() ?? '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm text-on-surface truncate">{student.name}</p>
+                      <p className="text-xs text-on-surface-variant truncate">{enrolledCourseTitles || 'No courses'}</p>
+                    </div>
+                    <span className="text-xs text-on-surface-variant flex-shrink-0">{formatLastActivity(student.lastActivity)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </motion.div>
   );
@@ -3231,10 +2548,15 @@ const TutorCourses = () => {
 const StudentDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { students, courses, sessions, resources, tutors, updateStudent, contentPosts, addContentPost, updateContentPost, deleteContentPost } = useData();
+  const { students, courses, tutors, currentUserEmail, updateStudent, contentPosts, addContentPost, updateContentPost, deleteContentPost } = useData();
 
   const student = students.find(s => s.id === id);
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
+
+  // Add course modal state
+  const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+  const [addCourseSelected, setAddCourseSelected] = useState<string | null>(null);
+  const [addCourseTutorIds, setAddCourseTutorIds] = useState<string[]>([]);
 
   // Content post editor state
   const [postEditorOpen, setPostEditorOpen] = useState(false);
@@ -3250,17 +2572,18 @@ const StudentDetail = () => {
     const current = student.assignedTutorIds ?? [];
     const isAssigned = current.includes(tutorId);
     updateStudent(student.id, {
-      assignedTutorIds: isAssigned ? current.filter(id => id !== tutorId) : [...current, tutorId],
+      assignedTutorIds: isAssigned ? current.filter(tid => tid !== tutorId) : [...current, tutorId],
     });
   };
 
-  const toggleCourse = (courseId: string) => {
-    const isEnrolled = student.enrolledCourseIds.includes(courseId);
-    const newIds = isEnrolled
-      ? student.enrolledCourseIds.filter(cid => cid !== courseId)
-      : [...student.enrolledCourseIds, courseId];
-    updateStudent(student.id, { enrolledCourseIds: newIds });
-    if (isEnrolled && selectedCourseId === courseId) setSelectedCourseId(null);
+  const enrollStudent = (courseId: string) => {
+    if (student.enrolledCourseIds.includes(courseId)) return;
+    updateStudent(student.id, { enrolledCourseIds: [...student.enrolledCourseIds, courseId] });
+  };
+
+  const unenrollStudent = (courseId: string) => {
+    updateStudent(student.id, { enrolledCourseIds: student.enrolledCourseIds.filter(cid => cid !== courseId) });
+    if (selectedCourseId === courseId) setSelectedCourseId(null);
   };
 
   const openNewPost = () => {
@@ -3285,7 +2608,7 @@ const StudentDetail = () => {
 
   const handleSavePost = async (status: 'draft' | 'published') => {
     if (!postForm.title.trim()) return;
-    const payload = { title: postForm.title, description: postForm.description, items: postForm.items, status, courseId: selectedCourseId ?? undefined, studentId: student.id };
+    const payload = { title: postForm.title, description: postForm.description, items: postForm.items, status, courseId: selectedCourseId ?? undefined, studentId: student.id, tutorEmail: currentUserEmail ?? undefined };
     if (editingPost) {
       await updateContentPost(editingPost.id, payload);
     } else {
@@ -3319,23 +2642,337 @@ const StudentDetail = () => {
     setPostForm(p => ({ ...p, items: p.items.filter((_, i) => i !== index) }));
   };
 
-  const enrolledCourses = courses.filter(c => student.enrolledCourseIds.includes(c.id));
+  const handleAddCourseConfirm = () => {
+    if (!addCourseSelected) return;
+    enrollStudent(addCourseSelected);
+    addCourseTutorIds.forEach(tid => {
+      if (!(student.assignedTutorIds ?? []).includes(tid)) toggleTutor(tid);
+    });
+    setShowAddCourseModal(false);
+    setSelectedCourseId(addCourseSelected);
+    setAddCourseSelected(null);
+    setAddCourseTutorIds([]);
+  };
 
+  const enrolledCourses = courses.filter(c => student.enrolledCourseIds.includes(c.id));
+  const unenrolledCourses = courses.filter(c => !student.enrolledCourseIds.includes(c.id));
+
+  // ── LEVEL 2: Course detail view ──
+  if (selectedCourseId) {
+    const selectedCourse = courses.find(c => c.id === selectedCourseId);
+    const courseTutorNames = (selectedCourse?.tutor || '').split(',').map(s => s.trim()).filter(Boolean);
+    const eligibleTutors = tutors.filter((t: Tutor) => courseTutorNames.includes(t.name));
+    const studentPosts = contentPosts
+      .filter(cp => cp.courseId === selectedCourseId && cp.studentId === student.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const publishedPostsCount = studentPosts.filter(p => p.status === 'published').length;
+
+    return (
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+        {/* Back to student */}
+        <button
+          onClick={() => setSelectedCourseId(null)}
+          className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-6 font-semibold"
+        >
+          <ChevronLeft size={18} /> Back to {student.name}
+        </button>
+
+        {/* Course header */}
+        <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-[32px] p-8 mb-8 border border-primary/10">
+          <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">{student.name}</p>
+          <h2 className="text-2xl font-black text-on-surface mb-4">{selectedCourse?.title ?? 'Course'}</h2>
+          <div className="flex flex-wrap gap-3">
+            <span className="bg-surface-container px-4 py-2 rounded-full text-sm font-bold text-on-surface">
+              {publishedPostsCount} {publishedPostsCount === 1 ? 'Post' : 'Posts'} Published
+            </span>
+            <span className="bg-surface-container px-4 py-2 rounded-full text-sm font-bold text-on-surface">
+              {studentPosts.filter(p => p.status === 'draft').length} Drafts
+            </span>
+          </div>
+        </div>
+
+        {/* Assigned Tutors for this course */}
+        {eligibleTutors.length > 0 && (
+          <section className="mb-8">
+            <h3 className="text-lg font-black text-on-surface mb-4">Tutors</h3>
+            <div className="space-y-2">
+              {eligibleTutors.map((t: Tutor) => {
+                const isAssigned = (student.assignedTutorIds ?? []).includes(t.id);
+                return (
+                  <div key={t.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">
+                        {t.name[0]?.toUpperCase() ?? '?'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-on-surface truncate">{t.name}</p>
+                        <p className="text-[11px] text-on-surface-variant truncate">{t.email}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => toggleTutor(t.id)}
+                      className={`ml-4 flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
+                        isAssigned
+                          ? 'bg-primary border-primary text-on-primary'
+                          : 'bg-transparent border-outline-variant/40 text-on-surface-variant hover:border-primary hover:text-primary'
+                      }`}
+                    >
+                      {isAssigned ? 'Assigned' : 'Assign'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Posts feed */}
+        <section>
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-lg font-black text-on-surface">Posts</h3>
+            <button
+              onClick={openNewPost}
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-2xl text-sm font-bold hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20"
+            >
+              <PlusCircle size={16} /> New Post
+            </button>
+          </div>
+
+          {studentPosts.length === 0 ? (
+            <button
+              onClick={openNewPost}
+              className="w-full flex flex-col items-center justify-center gap-3 py-16 rounded-3xl border-2 border-dashed border-outline-variant/40 hover:border-primary hover:bg-primary/5 transition-all text-on-surface-variant hover:text-primary"
+            >
+              <PlusCircle size={32} />
+              <span className="text-sm font-bold">Create the first post for this course</span>
+            </button>
+          ) : (
+            <div className="space-y-4">
+              {studentPosts.map(post => (
+                <div key={post.id} className="bg-surface-container-low rounded-[28px] p-8 border border-outline-variant/30 shadow-sm space-y-4 relative group">
+                  {/* Post actions overlay */}
+                  <div className="absolute top-5 right-5 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${post.status === 'published' ? 'bg-green-500/15 text-green-600' : 'bg-on-surface/10 text-on-surface-variant'}`}>
+                      {post.status === 'published' ? 'Published' : 'Draft'}
+                    </span>
+                    <button
+                      onClick={() => openEditPost(post)}
+                      className="p-2 rounded-xl bg-surface-container hover:bg-primary/10 hover:text-primary transition-colors"
+                      title="Edit post"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteContentPost(post.id)}
+                      className="p-2 rounded-xl bg-surface-container hover:bg-red-500/10 hover:text-red-500 transition-colors"
+                      title="Delete post"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  {/* Author + date */}
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">
+                      {(tutors.find((t: Tutor) => t.email === post.tutorEmail)?.name?.[0] ?? '?').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-on-surface">
+                        {tutors.find((t: Tutor) => t.email === post.tutorEmail)?.name ?? 'Tutor'}
+                      </p>
+                    </div>
+                    <p className="text-xs text-on-surface-variant flex-shrink-0 pr-24">
+                      {(() => { try { return format(new Date(post.createdAt), 'MMM d, yyyy'); } catch { return post.createdAt; } })()}
+                    </p>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="text-xl font-black text-on-surface leading-tight">{post.title}</h3>
+
+                  {/* Body */}
+                  {post.description && (
+                    <p className="text-base text-on-surface-variant leading-relaxed">{post.description}</p>
+                  )}
+
+                  {/* Media items */}
+                  {post.items.length > 0 && (
+                    <div className="space-y-3 pt-1">
+                      {post.items.map((item, i) => (
+                        <div key={i}>
+                          {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                            <div className="rounded-2xl overflow-hidden aspect-video w-full">
+                              <iframe src={toYouTubeEmbed(item.url!)!} className="w-full h-full" allowFullScreen />
+                            </div>
+                          )}
+                          {item.type === 'file' && (
+                            <div className="flex items-center gap-3 px-4 py-3 bg-surface-container rounded-xl border border-outline-variant/20">
+                              {fileIconForType(item.fileType ?? '')}
+                              <span className="text-sm font-semibold text-on-surface truncate flex-1">{item.fileName}</span>
+                            </div>
+                          )}
+                          {item.type === 'link' && (
+                            <a href={item.url} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-3 px-4 py-3 bg-primary/8 border border-primary/20 rounded-xl hover:bg-primary/15 transition-colors group/link w-fit max-w-full"
+                            >
+                              <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+                                <ExternalLink size={13} className="text-on-primary" />
+                              </div>
+                              <span className="text-sm font-bold text-primary group-hover/link:underline truncate">{item.label ?? item.url}</span>
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Post Editor Modal */}
+        <AnimatePresence>
+          {postEditorOpen && (
+            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                onClick={closeEditor} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              <motion.div
+                initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
+                onClick={e => e.stopPropagation()}
+                className="relative w-full max-w-4xl max-h-[92vh] bg-surface-container-low rounded-t-[40px] sm:rounded-[40px] border border-outline-variant/30 shadow-2xl flex flex-col overflow-hidden"
+              >
+                <div className="px-7 py-5 border-b border-outline-variant/20 flex items-center justify-between flex-shrink-0">
+                  <h3 className="text-lg font-black text-on-surface">{editingPost ? 'Edit Post' : 'New Post'}</h3>
+                  <button onClick={closeEditor} className="p-2 rounded-xl hover:bg-surface-container-high transition-colors"><X size={20} /></button>
+                </div>
+                <div className="flex flex-1 overflow-hidden">
+                  <div className="flex-1 overflow-y-auto p-7 space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Title</label>
+                      <input value={postForm.title} onChange={e => setPostForm(p => ({ ...p, title: e.target.value }))}
+                        placeholder="e.g. Introduction to Calculus"
+                        className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Description</label>
+                      <textarea value={postForm.description} rows={3} onChange={e => setPostForm(p => ({ ...p, description: e.target.value }))}
+                        placeholder="Brief description of this content..."
+                        className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none" />
+                    </div>
+                    <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                      <div className="flex items-center gap-2">
+                        <Youtube size={16} className="text-red-500" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Add YouTube Video</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input value={videoUrlInput} onChange={e => setVideoUrlInput(e.target.value)} placeholder="https://youtube.com/watch?v=..."
+                          className="flex-1 px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                        <button type="button" onClick={addVideoItem} disabled={!toYouTubeEmbed(videoUrlInput)}
+                          className="px-4 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-primary/90 transition-colors">Add</button>
+                      </div>
+                      {toYouTubeEmbed(videoUrlInput) && (
+                        <iframe src={toYouTubeEmbed(videoUrlInput)!} width="240" height="135"
+                          className="rounded-xl border border-outline-variant/20"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+                      )}
+                    </div>
+                    <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                      <div className="flex items-center gap-2">
+                        <Upload size={16} className="text-secondary" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Attach File</span>
+                      </div>
+                      <label className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-outline-variant/30 rounded-xl cursor-pointer hover:border-secondary hover:bg-secondary/5 transition-all">
+                        <Upload size={16} className="text-secondary" />
+                        <span className="text-sm text-on-surface-variant">Choose file (PDF, Word, Excel, image…)</span>
+                        <input type="file" className="hidden" onChange={addFileItem} />
+                      </label>
+                    </div>
+                    <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
+                      <div className="flex items-center gap-2">
+                        <ExternalLink size={16} className="text-tertiary" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Add Link</span>
+                      </div>
+                      <input value={linkUrlInput} onChange={e => setLinkUrlInput(e.target.value)} placeholder="https://..."
+                        className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                      <input value={linkLabelInput} onChange={e => setLinkLabelInput(e.target.value)} placeholder="Display label (optional)"
+                        className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+                      <button type="button" onClick={addLinkItem} disabled={!linkUrlInput.trim()}
+                        className="px-5 py-2.5 bg-tertiary text-on-tertiary rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-tertiary/90 transition-colors">Add Link</button>
+                    </div>
+                    {postForm.items.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Added Items</p>
+                        {postForm.items.map((item, i) => (
+                          <div key={i} className="flex items-center justify-between px-4 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
+                            <div className="flex items-center gap-3 min-w-0">
+                              {item.type === 'video' && <Youtube size={14} className="text-red-500 flex-shrink-0" />}
+                              {item.type === 'file' && fileIconForType(item.fileType ?? '')}
+                              {item.type === 'link' && <ExternalLink size={14} className="text-tertiary flex-shrink-0" />}
+                              <span className="text-sm truncate text-on-surface">{item.type === 'file' ? item.fileName : item.label ?? item.url}</span>
+                            </div>
+                            <button onClick={() => removeItem(i)} className="ml-3 flex-shrink-0 text-on-surface-variant hover:text-red-500 transition-colors"><X size={14} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="hidden lg:flex flex-col w-80 flex-shrink-0 border-l border-outline-variant/20 overflow-y-auto p-7 space-y-4 bg-surface-container-lowest">
+                    <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant">Student Preview</p>
+                    <h4 className="text-base font-black text-on-surface">{postForm.title || 'Untitled'}</h4>
+                    {postForm.description && <p className="text-sm text-on-surface-variant leading-relaxed">{postForm.description}</p>}
+                    {postForm.items.map((item, i) => (
+                      <div key={i}>
+                        {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
+                          <iframe src={toYouTubeEmbed(item.url!)!} width="100%" height="135" className="rounded-xl border border-outline-variant/20" allowFullScreen />
+                        )}
+                        {item.type === 'file' && (
+                          <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/15">
+                            {fileIconForType(item.fileType ?? '')}
+                            <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
+                          </div>
+                        )}
+                        {item.type === 'link' && (
+                          <div className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20">
+                            <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
+                            <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {postForm.items.length === 0 && <p className="text-xs text-on-surface-variant/50 italic">Add items on the left to see a preview.</p>}
+                  </div>
+                </div>
+                <div className="flex gap-3 px-7 py-5 border-t border-outline-variant/20 flex-shrink-0">
+                  <button type="button" onClick={closeEditor}
+                    className="px-6 py-3 rounded-2xl border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container-high transition-colors">Cancel</button>
+                  <button type="button" onClick={() => handleSavePost('draft')} disabled={!postForm.title.trim()}
+                    className="px-6 py-3 rounded-2xl border-2 border-primary text-primary font-bold text-sm disabled:opacity-40 hover:bg-primary/5 transition-colors">Save Draft</button>
+                  <button type="button" onClick={() => handleSavePost('published')} disabled={!postForm.title.trim()}
+                    className="flex-1 py-3 rounded-2xl bg-primary text-on-primary font-bold text-sm disabled:opacity-40 shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">Publish</button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    );
+  }
+
+  // ── LEVEL 1: Student overview ──
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-      <div className="mb-2">
-        <button onClick={() => navigate('/students')} className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-4 font-semibold">
-          <ChevronLeft size={18} /> Back to Students
-        </button>
-      </div>
+      <button onClick={() => navigate('/students')} className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-primary transition-colors mb-6 font-semibold">
+        <ChevronLeft size={18} /> Back to Students
+      </button>
+
       <Header title={student.name} subtitle={student.email} />
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         {[
-          { label: 'Enrolled Courses', value: student.enrolledCourseIds.length },
-          { label: 'Sessions', value: sessions.filter(s => s.studentId === student.id).length },
-          { label: 'Resources', value: resources.filter(r => r.studentId === student.id).length },
+          { label: 'Enrolled Courses', value: enrolledCourses.length },
+          { label: 'Posts Published', value: contentPosts.filter(cp => cp.studentId === student.id && cp.status === 'published').length },
+          { label: 'Drafts', value: contentPosts.filter(cp => cp.studentId === student.id && cp.status === 'draft').length },
         ].map(stat => (
           <div key={stat.label} className="bg-surface-container-low rounded-3xl p-5 border border-outline-variant/30">
             <p className="text-2xl font-black text-on-surface">{stat.value}</p>
@@ -3344,315 +2981,155 @@ const StudentDetail = () => {
         ))}
       </div>
 
-      {/* Assign Tutors */}
-      <section className="mb-10">
-        <div className="mb-5">
-          <h3 className="text-lg font-black text-on-surface mb-1">Assigned Tutors</h3>
-          <p className="text-sm text-on-surface-variant">Assign one or more tutors to this student.</p>
+      {/* Enrolled courses */}
+      <section>
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-black text-on-surface">Enrolled Courses</h3>
+          <button
+            onClick={() => { setAddCourseSelected(null); setAddCourseTutorIds([]); setShowAddCourseModal(true); }}
+            className="flex items-center gap-2 px-5 py-2.5 bg-primary text-on-primary rounded-2xl text-sm font-bold hover:bg-primary/90 transition-colors shadow-sm shadow-primary/20"
+          >
+            <PlusCircle size={16} /> Add Course
+          </button>
         </div>
-        {tutors.length === 0 ? (
-          <p className="text-sm text-on-surface-variant py-4">No tutors available.</p>
+
+        {enrolledCourses.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-outline-variant/30 rounded-3xl">
+            <BookOpen size={32} className="text-on-surface-variant/40 mb-3" />
+            <p className="text-sm font-bold text-on-surface-variant mb-1">No courses yet</p>
+            <p className="text-xs text-on-surface-variant/70">Click "Add Course" to enroll {student.name} in a course.</p>
+          </div>
         ) : (
-          <div className="space-y-2">
-            {tutors.map((t: Tutor) => {
-              const isAssigned = (student.assignedTutorIds ?? []).includes(t.id);
+          <div className="space-y-3">
+            {enrolledCourses.map(course => {
+              const courseTutorNames = (course.tutor || '').split(',').map(s => s.trim()).filter(Boolean);
+              const postCount = contentPosts.filter(cp => cp.courseId === course.id && cp.studentId === student.id && cp.status === 'published').length;
               return (
-                <div key={t.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
-                      <User size={15} />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-on-surface truncate">{t.name}</p>
-                      <p className="text-[11px] text-on-surface-variant truncate">{t.email}</p>
-                    </div>
+                <div
+                  key={course.id}
+                  className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-outline-variant/20 bg-surface-container-low hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group"
+                  onClick={() => setSelectedCourseId(course.id)}
+                >
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                    <BookOpen size={18} />
                   </div>
-                  <button
-                    onClick={() => toggleTutor(t.id)}
-                    className={`ml-4 flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
-                      isAssigned
-                        ? 'bg-primary border-primary text-on-primary'
-                        : 'bg-transparent border-outline-variant/40 text-on-surface-variant hover:border-primary hover:text-primary'
-                    }`}
-                  >
-                    {isAssigned ? 'Assigned' : 'Assign'}
-                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-black text-on-surface text-sm">{course.title}</p>
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      {courseTutorNames.length > 0 ? courseTutorNames.join(', ') : 'No tutors assigned'}
+                      {' · '}{postCount} {postCount === 1 ? 'post' : 'posts'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ChevronRight size={18} className="text-on-surface-variant group-hover:text-primary transition-colors" />
+                    <button
+                      onClick={e => { e.stopPropagation(); unenrollStudent(course.id); }}
+                      className="p-2 rounded-xl text-on-surface-variant hover:text-red-500 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Remove enrollment"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
-        {(student.assignedTutorIds ?? []).length === 0 && (
-          <p className="text-[11px] text-amber-500 mt-2 ml-1">This student has no assigned tutor yet.</p>
-        )}
       </section>
 
-      {/* Course Enrollment */}
-      <section className="mb-10">
-        <div className="mb-5">
-          <h3 className="text-lg font-black text-on-surface mb-1">Course Enrollment</h3>
-          <p className="text-sm text-on-surface-variant">Enroll or unenroll this student from courses.</p>
-        </div>
-        <div className="space-y-2">
-          {courses.map(course => {
-            const isEnrolled = student.enrolledCourseIds.includes(course.id);
-            return (
-              <div key={course.id} className="flex items-center justify-between px-4 py-3 rounded-2xl border border-outline-variant/20 bg-surface-container-low">
-                <div className="min-w-0">
-                  <span className="text-sm font-bold text-on-surface truncate block">{course.title}</span>
-                  <span className="text-[11px] text-on-surface-variant">{getLevelLabel(course.level)}</span>
-                </div>
-                <button
-                  onClick={() => toggleCourse(course.id)}
-                  className={`ml-4 flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-bold border-2 transition-all ${
-                    isEnrolled
-                      ? 'bg-primary border-primary text-on-primary'
-                      : 'bg-transparent border-outline-variant/40 text-on-surface-variant hover:border-primary hover:text-primary'
-                  }`}
-                >
-                  {isEnrolled ? 'Enrolled' : 'Enroll'}
-                </button>
-              </div>
-            );
-          })}
-          {courses.length === 0 && (
-            <p className="text-sm text-on-surface-variant py-4">No courses available.</p>
-          )}
-        </div>
-      </section>
-
-      {/* Manage Content */}
-      {enrolledCourses.length > 0 && (
-        <section>
-          <div className="mb-5">
-            <h3 className="text-lg font-black text-on-surface mb-1">Manage Content</h3>
-            <p className="text-sm text-on-surface-variant">Select a course, then create content posts for this student.</p>
-          </div>
-
-          {/* Course tabs */}
-          <div className="flex gap-2 flex-wrap mb-6">
-            {enrolledCourses.map(course => (
-              <button
-                key={course.id}
-                onClick={() => setSelectedCourseId(selectedCourseId === course.id ? null : course.id)}
-                className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all ${
-                  selectedCourseId === course.id
-                    ? 'bg-secondary text-on-secondary shadow-md'
-                    : 'bg-surface-container-low border border-outline-variant/30 text-on-surface-variant hover:text-on-surface'
-                }`}
-              >
-                {course.title}
-              </button>
-            ))}
-          </div>
-
-          {selectedCourseId && (
-            <motion.div key={selectedCourseId} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              {/* Add New Content card */}
-              <button
-                onClick={openNewPost}
-                className="w-full mb-4 flex flex-col items-center justify-center gap-2 py-8 rounded-3xl border-2 border-dashed border-outline-variant/40 hover:border-primary hover:bg-primary/5 transition-all text-on-surface-variant hover:text-primary"
-              >
-                <PlusCircle size={28} />
-                <span className="text-sm font-bold">Add New Content</span>
-              </button>
-
-              {/* Existing posts */}
-              <div className="space-y-2">
-                {contentPosts
-                  .filter(cp => cp.courseId === selectedCourseId && cp.studentId === student.id)
-                  .map(post => (
-                    <div
-                      key={post.id}
-                      onClick={() => openEditPost(post)}
-                      className="flex items-center justify-between px-5 py-4 rounded-2xl border border-outline-variant/20 bg-surface-container-low cursor-pointer hover:border-primary/30 transition-all"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-sm font-bold text-on-surface truncate">{post.title}</span>
-                        <span className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-bold ${post.status === 'published' ? 'bg-green-500/15 text-green-600' : 'bg-on-surface/10 text-on-surface-variant'}`}>
-                          {post.status === 'published' ? 'Published' : 'Draft'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); deleteContentPost(post.id); }}
-                        className="ml-4 flex-shrink-0 text-on-surface-variant hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  ))}
-                {contentPosts.filter(cp => cp.courseId === selectedCourseId && cp.studentId === student.id).length === 0 && (
-                  <p className="text-xs text-on-surface-variant italic px-2">No content posts yet for this course.</p>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </section>
-      )}
-
-      {/* Content Post Editor Modal */}
+      {/* Add Course Modal */}
       <AnimatePresence>
-        {postEditorOpen && (
+        {showAddCourseModal && (
           <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={closeEditor} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+              onClick={() => setShowAddCourseModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
             <motion.div
               initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 40 }}
               onClick={e => e.stopPropagation()}
-              className="relative w-full max-w-4xl max-h-[92vh] bg-surface-container-low rounded-t-[40px] sm:rounded-[40px] border border-outline-variant/30 shadow-2xl flex flex-col overflow-hidden"
+              className="relative w-full max-w-lg max-h-[85vh] bg-surface-container-low rounded-t-[40px] sm:rounded-[40px] border border-outline-variant/30 shadow-2xl flex flex-col overflow-hidden"
             >
-              {/* Header */}
               <div className="px-7 py-5 border-b border-outline-variant/20 flex items-center justify-between flex-shrink-0">
-                <h3 className="text-lg font-black text-on-surface">{editingPost ? 'Edit Content Post' : 'New Content Post'}</h3>
-                <button onClick={closeEditor} className="p-2 rounded-xl hover:bg-surface-container-high transition-colors"><X size={20} /></button>
+                <h3 className="text-lg font-black text-on-surface">Add Course</h3>
+                <button onClick={() => setShowAddCourseModal(false)} className="p-2 rounded-xl hover:bg-surface-container-high transition-colors"><X size={20} /></button>
               </div>
 
-              {/* Body */}
-              <div className="flex flex-1 overflow-hidden">
-                {/* Form */}
-                <div className="flex-1 overflow-y-auto p-7 space-y-6">
-                  {/* Title */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Title</label>
-                    <input
-                      value={postForm.title}
-                      onChange={e => setPostForm(p => ({ ...p, title: e.target.value }))}
-                      placeholder="e.g. Introduction to Calculus"
-                      className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
-                    />
-                  </div>
-
-                  {/* Description */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Description</label>
-                    <textarea
-                      value={postForm.description}
-                      rows={3}
-                      onChange={e => setPostForm(p => ({ ...p, description: e.target.value }))}
-                      placeholder="Brief description of this content..."
-                      className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm resize-none"
-                    />
-                  </div>
-
-                  {/* Add YouTube Video */}
-                  <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
-                    <div className="flex items-center gap-2">
-                      <Youtube size={16} className="text-red-500" />
-                      <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Add YouTube Video</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        value={videoUrlInput}
-                        onChange={e => setVideoUrlInput(e.target.value)}
-                        placeholder="https://youtube.com/watch?v=..."
-                        className="flex-1 px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                      <button type="button" onClick={addVideoItem} disabled={!toYouTubeEmbed(videoUrlInput)}
-                        className="px-4 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-primary/90 transition-colors">
-                        Add
-                      </button>
-                    </div>
-                    {toYouTubeEmbed(videoUrlInput) && (
-                      <iframe src={toYouTubeEmbed(videoUrlInput)!} width="240" height="135"
-                        className="rounded-xl border border-outline-variant/20"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
-                    )}
-                  </div>
-
-                  {/* Attach File */}
-                  <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
-                    <div className="flex items-center gap-2">
-                      <Upload size={16} className="text-secondary" />
-                      <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Attach File</span>
-                    </div>
-                    <label className="flex items-center gap-3 px-4 py-3 border-2 border-dashed border-outline-variant/30 rounded-xl cursor-pointer hover:border-secondary hover:bg-secondary/5 transition-all">
-                      <Upload size={16} className="text-secondary" />
-                      <span className="text-sm text-on-surface-variant">Choose file (PDF, Word, Excel, image…)</span>
-                      <input type="file" className="hidden" onChange={addFileItem} />
-                    </label>
-                  </div>
-
-                  {/* Add Link */}
-                  <div className="space-y-3 p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/20">
-                    <div className="flex items-center gap-2">
-                      <ExternalLink size={16} className="text-tertiary" />
-                      <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Add Link</span>
-                    </div>
-                    <input value={linkUrlInput} onChange={e => setLinkUrlInput(e.target.value)} placeholder="https://..."
-                      className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    <input value={linkLabelInput} onChange={e => setLinkLabelInput(e.target.value)} placeholder="Display label (optional)"
-                      className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-                    <button type="button" onClick={addLinkItem} disabled={!linkUrlInput.trim()}
-                      className="px-5 py-2.5 bg-tertiary text-on-tertiary rounded-xl text-sm font-bold disabled:opacity-40 hover:bg-tertiary/90 transition-colors">
-                      Add Link
-                    </button>
-                  </div>
-
-                  {/* Added items list */}
-                  {postForm.items.length > 0 && (
+              <div className="flex-1 overflow-y-auto p-7 space-y-6">
+                {/* Course picker */}
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3">Select a Course</p>
+                  {unenrolledCourses.length === 0 ? (
+                    <p className="text-sm text-on-surface-variant py-4 text-center">No additional courses available.</p>
+                  ) : (
                     <div className="space-y-2">
-                      <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Added Items</p>
-                      {postForm.items.map((item, i) => (
-                        <div key={i} className="flex items-center justify-between px-4 py-3 bg-surface-container-lowest rounded-xl border border-outline-variant/15">
-                          <div className="flex items-center gap-3 min-w-0">
-                            {item.type === 'video' && <Youtube size={14} className="text-red-500 flex-shrink-0" />}
-                            {item.type === 'file' && fileIconForType(item.fileType ?? '')}
-                            {item.type === 'link' && <ExternalLink size={14} className="text-tertiary flex-shrink-0" />}
-                            <span className="text-sm truncate text-on-surface">
-                              {item.type === 'file' ? item.fileName : item.label ?? item.url}
-                            </span>
+                      {unenrolledCourses.map(course => (
+                        <button
+                          key={course.id}
+                          onClick={() => { setAddCourseSelected(course.id); setAddCourseTutorIds([]); }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all ${
+                            addCourseSelected === course.id
+                              ? 'border-primary bg-primary/8'
+                              : 'border-outline-variant/20 bg-surface-container-low hover:border-primary/40'
+                          }`}
+                        >
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${addCourseSelected === course.id ? 'bg-primary text-on-primary' : 'bg-primary/10 text-primary'}`}>
+                            <BookOpen size={15} />
                           </div>
-                          <button onClick={() => removeItem(i)} className="ml-3 flex-shrink-0 text-on-surface-variant hover:text-red-500 transition-colors"><X size={14} /></button>
-                        </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-on-surface truncate">{course.title}</p>
+                            <p className="text-[11px] text-on-surface-variant">{getLevelLabel(course.level)}</p>
+                          </div>
+                          {addCourseSelected === course.id && <Check size={16} className="text-primary flex-shrink-0" />}
+                        </button>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Preview pane (desktop only) */}
-                <div className="hidden lg:flex flex-col w-80 flex-shrink-0 border-l border-outline-variant/20 overflow-y-auto p-7 space-y-4 bg-surface-container-lowest">
-                  <p className="text-xs font-black uppercase tracking-widest text-on-surface-variant">Student Preview</p>
-                  <h4 className="text-base font-black text-on-surface">{postForm.title || 'Untitled'}</h4>
-                  {postForm.description && <p className="text-sm text-on-surface-variant leading-relaxed">{postForm.description}</p>}
-                  {postForm.items.map((item, i) => (
-                    <div key={i}>
-                      {item.type === 'video' && toYouTubeEmbed(item.url ?? '') && (
-                        <iframe src={toYouTubeEmbed(item.url!)!} width="100%" height="135"
-                          className="rounded-xl border border-outline-variant/20" allowFullScreen />
-                      )}
-                      {item.type === 'file' && (
-                        <div className="flex items-center gap-3 px-4 py-3 bg-surface-container-low rounded-xl border border-outline-variant/15">
-                          {fileIconForType(item.fileType ?? '')}
-                          <span className="text-sm font-medium text-on-surface truncate">{item.fileName}</span>
-                        </div>
-                      )}
-                      {item.type === 'link' && (
-                        <div className="flex items-center gap-2 px-4 py-3 bg-tertiary/5 rounded-xl border border-tertiary/20">
-                          <ExternalLink size={14} className="text-tertiary flex-shrink-0" />
-                          <span className="text-sm text-tertiary font-medium truncate">{item.label ?? item.url}</span>
-                        </div>
-                      )}
+                {/* Tutor assignment for selected course */}
+                {addCourseSelected && (() => {
+                  const selectedCourse = courses.find(c => c.id === addCourseSelected);
+                  const eligibleNames = (selectedCourse?.tutor || '').split(',').map(s => s.trim()).filter(Boolean);
+                  const eligibleTutorsForCourse = tutors.filter((t: Tutor) => eligibleNames.includes(t.name));
+                  if (eligibleTutorsForCourse.length === 0) return null;
+                  return (
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3">Assign Tutors</p>
+                      <div className="space-y-2">
+                        {eligibleTutorsForCourse.map((t: Tutor) => {
+                          const isSelected = addCourseTutorIds.includes(t.id);
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => setAddCourseTutorIds(prev => isSelected ? prev.filter(tid => tid !== t.id) : [...prev, t.id])}
+                              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border-2 text-left transition-all ${
+                                isSelected ? 'border-primary bg-primary/8' : 'border-outline-variant/20 hover:border-primary/40'
+                              }`}
+                            >
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm flex-shrink-0 ${isSelected ? 'bg-primary text-on-primary' : 'bg-primary/10 text-primary'}`}>
+                                {t.name[0]?.toUpperCase() ?? '?'}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-on-surface truncate">{t.name}</p>
+                                <p className="text-[11px] text-on-surface-variant truncate">{t.email}</p>
+                              </div>
+                              {isSelected && <Check size={16} className="text-primary flex-shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  ))}
-                  {postForm.items.length === 0 && (
-                    <p className="text-xs text-on-surface-variant/50 italic">Add items on the left to see a preview.</p>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
 
-              {/* Footer */}
               <div className="flex gap-3 px-7 py-5 border-t border-outline-variant/20 flex-shrink-0">
-                <button type="button" onClick={closeEditor}
+                <button onClick={() => setShowAddCourseModal(false)}
                   className="px-6 py-3 rounded-2xl border border-outline-variant/30 text-on-surface-variant font-bold text-sm hover:bg-surface-container-high transition-colors">
                   Cancel
                 </button>
-                <button type="button" onClick={() => handleSavePost('draft')} disabled={!postForm.title.trim()}
-                  className="px-6 py-3 rounded-2xl border-2 border-primary text-primary font-bold text-sm disabled:opacity-40 hover:bg-primary/5 transition-colors">
-                  Save Draft
-                </button>
-                <button type="button" onClick={() => handleSavePost('published')} disabled={!postForm.title.trim()}
+                <button onClick={handleAddCourseConfirm} disabled={!addCourseSelected}
                   className="flex-1 py-3 rounded-2xl bg-primary text-on-primary font-bold text-sm disabled:opacity-40 shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all">
-                  Publish
+                  Enroll & Open Course
                 </button>
               </div>
             </motion.div>
@@ -4445,7 +3922,6 @@ export default function App() {
                         <Route path="/students" element={<TutorStudents />} />
                         <Route path="/students/:id" element={<StudentDetail />} />
                         <Route path="/tutors" element={<TutorsList />} />
-                        <Route path="/schedule" element={<TutorSchedule />} />
                         <Route path="/analytics" element={<TutorAnalytics />} />
                         <Route path="/profile" element={<Profile />} />
                       </>
@@ -4454,7 +3930,6 @@ export default function App() {
                         <Route path="/" element={<Dashboard />} />
                         <Route path="/courses" element={<Courses />} />
                         <Route path="/courses/:id" element={<StudentCoursePage />} />
-                        <Route path="/schedule" element={<Schedule />} />
                         <Route path="/resources" element={<Resources />} />
                         <Route path="/profile" element={<Profile />} />
                       </>
