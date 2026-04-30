@@ -254,6 +254,41 @@ const MobileNav = ({ role }: { role: string }) => {
   );
 };
 
+const MobileTopBar = ({ onLogout }: { onLogout: () => void }) => {
+  const { currentUserEmail, role } = useData();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-surface-container-lowest border-b border-outline-variant/20 px-4 py-2.5 flex items-center justify-between">
+      <span className="text-sm font-black text-on-surface tracking-tight">DM - Tutoring</span>
+      <div className="relative">
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="w-9 h-9 rounded-full bg-primary-container border-2 border-primary/10 flex items-center justify-center text-primary"
+        >
+          <User size={18} />
+        </button>
+        {open && (
+          <>
+            <div className="fixed inset-0" onClick={() => setOpen(false)} />
+            <div className="absolute right-0 top-full mt-2 bg-surface-container-low border border-outline-variant/30 rounded-2xl shadow-xl overflow-hidden min-w-[180px] z-50">
+              <div className="px-4 py-3 border-b border-outline-variant/20">
+                <p className="text-xs font-bold text-on-surface truncate">{currentUserEmail ?? ''}</p>
+                <p className="text-[10px] text-on-surface-variant capitalize">{role}</p>
+              </div>
+              <button
+                onClick={() => { setOpen(false); onLogout(); }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <LogOut size={15} /> Log out
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => {
   const { currentUserEmail, role, tutors, students } = useData();
   const currentUserName = React.useMemo(() => {
@@ -268,8 +303,8 @@ const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => {
         <h2 className="text-3xl font-bold tracking-tight text-on-surface">{title}</h2>
         {subtitle && <p className="text-on-surface-variant mt-1">{subtitle}</p>}
       </div>
-      <div className="flex items-center gap-3 pl-4 border-l border-outline-variant/30">
-        <div className="text-right hidden sm:block">
+      <div className="hidden lg:flex items-center gap-3 pl-4 border-l border-outline-variant/30">
+        <div className="text-right">
           <p className="text-sm font-semibold text-on-surface">{currentUserName || 'User'}</p>
           <p className="text-xs text-on-surface-variant capitalize">{role || 'user'}</p>
         </div>
@@ -2457,7 +2492,7 @@ const TutorCourses = () => {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-surface-container-low rounded-3xl sm:rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
+              className="relative w-full max-w-2xl bg-surface-container-low rounded-3xl sm:rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
               <div className="px-5 py-4 sm:p-8 border-b border-outline-variant/30 flex items-center justify-between bg-surface-container-high">
                 <h3 className="text-xl sm:text-2xl font-black text-on-surface">
@@ -2471,7 +2506,7 @@ const TutorCourses = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-5 max-h-[75vh] overflow-y-auto">
+              <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Course Name</label>
                   <input
@@ -2807,7 +2842,7 @@ const StudentDetail = () => {
                       <Edit3 size={14} />
                     </button>
                     <button
-                      onClick={() => deleteContentPost(post.id)}
+                      onClick={() => { if (confirm('Delete this post?')) deleteContentPost(post.id); }}
                       className="p-2 rounded-xl bg-surface-container hover:bg-red-500/10 hover:text-red-500 transition-colors"
                       title="Delete post"
                     >
@@ -3269,15 +3304,15 @@ const TutorStudents = () => {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               onClick={() => setShowAddStudent(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
+              className="relative w-full max-w-md bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
             >
-              <div className="p-8 border-b border-outline-variant/20 bg-surface-container-high">
+              <div className="p-8 border-b border-outline-variant/20 bg-surface-container-high flex-shrink-0">
                 <h3 className="text-2xl font-black text-on-surface mb-1">Invite Student</h3>
                 <p className="text-sm text-on-surface-variant">Send an invite via email, SMS, or share the link.</p>
               </div>
 
               {/* Tabs */}
-              <div className="flex border-b border-outline-variant/20">
+              <div className="flex border-b border-outline-variant/20 flex-shrink-0">
                 {([
                   { id: 'email', label: 'Email', icon: Mail },
                   { id: 'sms', label: 'SMS', icon: Phone },
@@ -3290,7 +3325,7 @@ const TutorStudents = () => {
                 ))}
               </div>
 
-              <form onSubmit={handleAddStudent} className="p-8 space-y-5">
+              <form onSubmit={handleAddStudent} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
                   <input type="text" required value={newStudent.name}
@@ -3611,7 +3646,7 @@ const TutorsList = () => {
               )}
             </div>
             <button
-              onClick={() => deleteTutor(tutor.id)}
+              onClick={() => { if (confirm(`Delete ${tutor.name}?`)) deleteTutor(tutor.id); }}
               className="p-2 rounded-xl text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
             >
               <Trash2 size={16} />
@@ -3644,7 +3679,7 @@ const TutorsList = () => {
                   <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.lastActivity ?? '—'}</td>
                   <td className="px-6 py-4">
                     <button
-                      onClick={() => deleteTutor(tutor.id)}
+                      onClick={() => { if (confirm(`Delete ${tutor.name}?`)) deleteTutor(tutor.id); }}
                       className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 size={16} />
@@ -4040,8 +4075,9 @@ export default function App() {
           ) : (
             <>
               <Sidebar onLogout={handleLogout} role={userRole || 'student'} />
-              
-              <main className="flex-1 p-4 md:p-8 lg:p-12 pb-24 lg:pb-12 overflow-x-hidden">
+              <MobileTopBar onLogout={handleLogout} />
+
+              <main className="flex-1 p-4 pt-16 md:p-8 md:pt-8 lg:p-12 pb-24 lg:pb-12 overflow-x-hidden">
                 <AnimatePresence mode="wait">
                   <Routes>
                     {userRole === 'tutor' ? (
