@@ -2300,113 +2300,146 @@ const TutorCourses = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-6">
-        {/* Level filter pills */}
-        <div className="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5">
-          {levelFilters.map(lv => (
-            <button
-              key={lv}
-              onClick={() => setFilterLevel(lv)}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                filterLevel === lv
-                  ? 'bg-primary text-on-primary shadow-sm'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              }`}
-            >
-              {lv === 'All' ? 'All Levels' : getLevelLabel(lv)}
-            </button>
-          ))}
+      <div className="mb-6 space-y-3">
+        {/* Level filter pills — scrollable on mobile */}
+        <div className="overflow-x-auto pb-1 -mx-1 px-1">
+          <div className="flex items-center gap-1.5 bg-surface-container-low border border-outline-variant/30 rounded-2xl p-1.5 w-max min-w-full sm:w-auto sm:min-w-0">
+            {levelFilters.map(lv => (
+              <button
+                key={lv}
+                onClick={() => setFilterLevel(lv)}
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                  filterLevel === lv
+                    ? 'bg-primary text-on-primary shadow-sm'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                {lv === 'All' ? 'All Levels' : getLevelLabel(lv)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Tutor filter dropdown */}
-        <select
-          value={filterTutor}
-          onChange={(e) => setFilterTutor(e.target.value)}
-          className="px-4 py-2.5 bg-surface-container-low border border-outline-variant/30 rounded-2xl text-xs font-bold text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
-        >
-          <option value="All">All Tutors</option>
-          {tutors.map(t => (
-            <option key={t.id} value={t.name}>{t.name}</option>
-          ))}
-        </select>
-
-        {(filterLevel !== 'All' || filterTutor !== 'All') && (
-          <button
-            onClick={() => { setFilterLevel('All'); setFilterTutor('All'); }}
-            className="px-3 py-2 text-xs font-bold text-on-surface-variant hover:text-primary rounded-xl transition-colors"
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Tutor filter dropdown */}
+          <select
+            value={filterTutor}
+            onChange={(e) => setFilterTutor(e.target.value)}
+            className="px-4 py-2.5 bg-surface-container-low border border-outline-variant/30 rounded-2xl text-xs font-bold text-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none cursor-pointer"
           >
-            Clear filters
-          </button>
-        )}
+            <option value="All">All Tutors</option>
+            {tutors.map(t => (
+              <option key={t.id} value={t.name}>{t.name}</option>
+            ))}
+          </select>
+
+          {(filterLevel !== 'All' || filterTutor !== 'All') && (
+            <button
+              onClick={() => { setFilterLevel('All'); setFilterTutor('All'); }}
+              className="px-3 py-2 text-xs font-bold text-on-surface-variant hover:text-primary rounded-xl transition-colors"
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-high">
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Course</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Level</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Tutor(s)</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
+      {/* Mobile card list */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {filteredCourses.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 py-16 text-on-surface-variant">
+            <Search size={48} className="opacity-20" />
+            <p className="font-bold">No courses found matching your search.</p>
+          </div>
+        ) : filteredCourses.map((course) => (
+          <button
+            key={course.id}
+            onClick={() => handleOpenEditModal(course)}
+            className="bg-surface-container-low border border-outline-variant/30 rounded-3xl p-5 flex items-center gap-4 text-left w-full active:scale-[0.98] transition-transform"
+          >
+            <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+              <BookOpen size={20} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-on-surface leading-tight truncate">{course.title}</p>
+              <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="px-2.5 py-1 bg-surface-container-highest text-[10px] font-bold rounded-full text-on-surface-variant uppercase tracking-widest whitespace-nowrap">
+                  {course.level === 'Elementary' ? 'Elem/Middle' : course.level === 'Uni' ? 'College/Uni' : course.level}
+                </span>
+                <span className="text-xs text-on-surface-variant truncate">{course.tutor || 'Unassigned'}</span>
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-on-surface-variant flex-shrink-0" />
+          </button>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-surface-container-high">
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Course</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Level</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Tutor(s)</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/20">
+            {filteredCourses.map((course) => (
+              <tr
+                key={course.id}
+                className="hover:bg-surface-container-lowest transition-colors"
+              >
+                <td className="px-8 py-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                      <BookOpen size={24} />
+                    </div>
+                    <div>
+                      <p className="font-bold text-on-surface">{course.title}</p>
+                      <p className="text-xs text-on-surface-variant line-clamp-1 max-w-xs">{course.description}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-8 py-6">
+                  <span className="px-3 py-1 bg-surface-container-highest text-[10px] font-bold rounded-full text-on-surface-variant uppercase tracking-widest">
+                    {getLevelLabel(course.level)}
+                  </span>
+                </td>
+                <td className="px-8 py-6 text-sm text-on-surface-variant">
+                  {course.tutor || 'Unassigned'}
+                </td>
+                <td className="px-8 py-6 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => handleOpenEditModal(course)}
+                      className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <Edit3 size={18} />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(course.id)}
+                      className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-red-600 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/20">
-              {filteredCourses.map((course) => (
-                <tr
-                  key={course.id}
-                  className="hover:bg-surface-container-lowest transition-colors"
-                >
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                        <BookOpen size={24} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-on-surface">{course.title}</p>
-                        <p className="text-xs text-on-surface-variant line-clamp-1 max-w-xs">{course.description}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className="px-3 py-1 bg-surface-container-highest text-[10px] font-bold rounded-full text-on-surface-variant uppercase tracking-widest">
-                      {getLevelLabel(course.level)}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 text-sm text-on-surface-variant">
-                    {course.tutor || 'Unassigned'}
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleOpenEditModal(course)}
-                        className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-primary transition-colors"
-                      >
-                        <Edit3 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(course.id)}
-                        className="p-2 rounded-lg hover:bg-surface-container-high text-on-surface-variant hover:text-red-600 transition-colors"
-                      >
-                        <Trash2 size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredCourses.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-8 py-20 text-center">
-                    <div className="flex flex-col items-center gap-4 text-on-surface-variant">
-                      <Search size={48} className="opacity-20" />
-                      <p className="font-bold">No courses found matching your search.</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {filteredCourses.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-8 py-20 text-center">
+                  <div className="flex flex-col items-center gap-4 text-on-surface-variant">
+                    <Search size={48} className="opacity-20" />
+                    <p className="font-bold">No courses found matching your search.</p>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Add/Edit Modal */}
@@ -2424,10 +2457,10 @@ const TutorCourses = () => {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-2xl bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
+              className="relative w-full max-w-2xl bg-surface-container-low rounded-3xl sm:rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden"
             >
-              <div className="p-8 border-b border-outline-variant/30 flex items-center justify-between bg-surface-container-high">
-                <h3 className="text-2xl font-black text-on-surface">
+              <div className="px-5 py-4 sm:p-8 border-b border-outline-variant/30 flex items-center justify-between bg-surface-container-high">
+                <h3 className="text-xl sm:text-2xl font-black text-on-surface">
                   {editingCourse ? 'Edit Course' : 'Add New Course'}
                 </h3>
                 <button
@@ -2438,7 +2471,7 @@ const TutorCourses = () => {
                 </button>
               </div>
 
-              <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+              <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-5 max-h-[75vh] overflow-y-auto">
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest ml-1">Course Name</label>
                   <input
@@ -2521,20 +2554,31 @@ const TutorCourses = () => {
                   />
                 </div>
 
-                <div className="pt-4 flex gap-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="flex-1 py-4 bg-surface-container-highest text-on-surface rounded-2xl font-bold hover:bg-surface-container-highest/80 transition-all"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-1 py-4 bg-primary text-on-primary rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
-                  >
-                    {editingCourse ? 'Save Changes' : 'Create Course'}
-                  </button>
+                <div className="pt-4 flex flex-col gap-3">
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsModalOpen(false)}
+                      className="flex-1 py-4 bg-surface-container-highest text-on-surface rounded-2xl font-bold hover:bg-surface-container-highest/80 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-4 bg-primary text-on-primary rounded-2xl font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
+                    >
+                      {editingCourse ? 'Save Changes' : 'Create Course'}
+                    </button>
+                  </div>
+                  {editingCourse && (
+                    <button
+                      type="button"
+                      onClick={() => { setIsModalOpen(false); handleDelete(editingCourse.id); }}
+                      className="w-full py-3 text-sm font-bold text-red-500 hover:text-red-600 hover:bg-red-50 rounded-2xl transition-all"
+                    >
+                      Delete Course
+                    </button>
+                  )}
                 </div>
               </form>
             </motion.div>
@@ -3333,104 +3377,157 @@ const TutorStudents = () => {
         )}
       </AnimatePresence>
 
-      {/* Student Table */}
-      <div className="bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-high">
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Student</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Assigned Tutor(s)</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Enrolled Courses</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Last Active</th>
-                <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/20">
-              {filtered.map(student => (
-                <tr key={student.id}
-                  className="hover:bg-surface-container-lowest transition-colors cursor-pointer"
-                  onClick={() => navigate(`/students/${student.id}`)}
+      {/* Mobile card list */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 py-16 text-on-surface-variant">
+            <Users size={48} className="opacity-20" />
+            <p className="font-bold">No students found.</p>
+          </div>
+        ) : filtered.map(student => {
+          const enrolledCount = student.enrolledCourseIds.filter(id => courses.find(c => c.id === id)).length;
+          const assignedTutors = (student.assignedTutorIds ?? []).map(id => tutors.find(t => t.id === id)).filter(Boolean);
+          return (
+            <div
+              key={student.id}
+              onClick={() => navigate(`/students/${student.id}`)}
+              className="bg-surface-container-low border border-outline-variant/30 rounded-3xl p-5 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-transform"
+            >
+              <div className="w-11 h-11 rounded-full bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
+                <User size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-on-surface truncate">{student.name}</p>
+                <p className="text-xs text-on-surface-variant truncate">{student.email}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <span className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-full whitespace-nowrap">
+                    {enrolledCount} {enrolledCount === 1 ? 'course' : 'courses'}
+                  </span>
+                  {assignedTutors.length > 0
+                    ? <span className="text-[10px] text-on-surface-variant truncate">{assignedTutors.map(t => t!.name).join(', ')}</span>
+                    : <span className="text-[10px] text-amber-500 font-semibold italic">No tutor</span>
+                  }
+                </div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete ${student.name}? This will also remove their account.`)) return;
+                    setDeletingId(student.id);
+                    await deleteStudent(student.id);
+                    setDeletingId(null);
+                  }}
+                  disabled={deletingId === student.id}
+                  className="p-2 rounded-lg text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
                 >
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
-                        <User size={18} />
-                      </div>
-                      <div>
-                        <p className="font-bold text-on-surface">{student.name}</p>
-                        <p className="text-xs text-on-surface-variant">{student.email}</p>
-                      </div>
+                  {deletingId === student.id
+                    ? <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                    : <Trash2 size={16} />
+                  }
+                </button>
+                <ChevronRight size={18} className="text-on-surface-variant" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block bg-surface-container-low rounded-[40px] border border-outline-variant/30 overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-surface-container-high">
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Student</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Assigned Tutor(s)</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Enrolled Courses</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Last Active</th>
+              <th className="px-8 py-6 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-outline-variant/20">
+            {filtered.map(student => (
+              <tr key={student.id}
+                className="hover:bg-surface-container-lowest transition-colors cursor-pointer"
+                onClick={() => navigate(`/students/${student.id}`)}
+              >
+                <td className="px-8 py-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary flex-shrink-0">
+                      <User size={18} />
                     </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-wrap gap-1.5">
-                      {(() => {
-                        const assigned = (student.assignedTutorIds ?? [])
-                          .map(id => tutors.find(t => t.id === id))
-                          .filter(Boolean);
-                        if (assigned.length === 0) return <span className="text-[10px] text-amber-500 font-semibold italic">None assigned</span>;
-                        return assigned.map(t => (
-                          <span key={t!.id} className="px-2.5 py-1 bg-secondary/10 text-secondary text-[10px] font-bold rounded-lg">{t!.name}</span>
-                        ));
-                      })()}
+                    <div>
+                      <p className="font-bold text-on-surface">{student.name}</p>
+                      <p className="text-xs text-on-surface-variant">{student.email}</p>
                     </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-wrap gap-1.5">
-                      {(() => {
-                        const validCourses = student.enrolledCourseIds
-                          .map(id => courses.find(c => c.id === id))
-                          .filter(Boolean);
-                        return <>
-                          {validCourses.slice(0, 3).map(course => (
-                            <span key={course!.id} className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-lg">{course!.title}</span>
-                          ))}
-                          {validCourses.length > 3 && (
-                            <span className="px-2.5 py-1 bg-surface-container-high text-on-surface-variant text-[10px] font-bold rounded-lg">+{validCourses.length - 3} more</span>
-                          )}
-                          {validCourses.length === 0 && <span className="text-[10px] text-on-surface-variant italic">No courses</span>}
-                        </>;
-                      })()}
-                    </div>
-                  </td>
-                  <td className="px-8 py-6 text-sm text-on-surface-variant">{formatLastActivity(student.lastActivity)}</td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={async () => {
-                          if (!confirm(`Delete ${student.name}? This will also remove their account.`)) return;
-                          setDeletingId(student.id);
-                          await deleteStudent(student.id);
-                          setDeletingId(null);
-                        }}
-                        disabled={deletingId === student.id}
-                        className="p-2 rounded-lg text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
-                      >
-                        {deletingId === student.id
-                          ? <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                          : <Trash2 size={16} />
-                        }
-                      </button>
-                      <button onClick={() => navigate(`/students/${student.id}`)}
-                        className="p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors">
-                        <ChevronRight size={18} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filtered.length === 0 && (
-                <tr><td colSpan={5} className="px-8 py-20 text-center">
-                  <div className="flex flex-col items-center gap-4 text-on-surface-variant">
-                    <Users size={48} className="opacity-20" />
-                    <p className="font-bold">No students found.</p>
                   </div>
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                </td>
+                <td className="px-8 py-6">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(() => {
+                      const assigned = (student.assignedTutorIds ?? [])
+                        .map(id => tutors.find(t => t.id === id))
+                        .filter(Boolean);
+                      if (assigned.length === 0) return <span className="text-[10px] text-amber-500 font-semibold italic">None assigned</span>;
+                      return assigned.map(t => (
+                        <span key={t!.id} className="px-2.5 py-1 bg-secondary/10 text-secondary text-[10px] font-bold rounded-lg">{t!.name}</span>
+                      ));
+                    })()}
+                  </div>
+                </td>
+                <td className="px-8 py-6">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(() => {
+                      const validCourses = student.enrolledCourseIds
+                        .map(id => courses.find(c => c.id === id))
+                        .filter(Boolean);
+                      return <>
+                        {validCourses.slice(0, 3).map(course => (
+                          <span key={course!.id} className="px-2.5 py-1 bg-primary/10 text-primary text-[10px] font-bold rounded-lg">{course!.title}</span>
+                        ))}
+                        {validCourses.length > 3 && (
+                          <span className="px-2.5 py-1 bg-surface-container-high text-on-surface-variant text-[10px] font-bold rounded-lg">+{validCourses.length - 3} more</span>
+                        )}
+                        {validCourses.length === 0 && <span className="text-[10px] text-on-surface-variant italic">No courses</span>}
+                      </>;
+                    })()}
+                  </div>
+                </td>
+                <td className="px-8 py-6 text-sm text-on-surface-variant">{formatLastActivity(student.lastActivity)}</td>
+                <td className="px-8 py-6 text-right">
+                  <div className="flex items-center justify-end gap-2" onClick={e => e.stopPropagation()}>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Delete ${student.name}? This will also remove their account.`)) return;
+                        setDeletingId(student.id);
+                        await deleteStudent(student.id);
+                        setDeletingId(null);
+                      }}
+                      disabled={deletingId === student.id}
+                      className="p-2 rounded-lg text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                    >
+                      {deletingId === student.id
+                        ? <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                        : <Trash2 size={16} />
+                      }
+                    </button>
+                    <button onClick={() => navigate(`/students/${student.id}`)}
+                      className="p-2 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/5 transition-colors">
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr><td colSpan={5} className="px-8 py-20 text-center">
+                <div className="flex flex-col items-center gap-4 text-on-surface-variant">
+                  <Users size={48} className="opacity-20" />
+                  <p className="font-bold">No students found.</p>
+                </div>
+              </td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </motion.div>
   );
@@ -3471,61 +3568,93 @@ const TutorsList = () => {
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
       <Header title="Tutors" />
-      <div className="bg-surface-container-low rounded-[28px] border border-outline-variant/30 overflow-hidden">
-        <div className="p-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between border-b border-outline-variant/20">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={18} />
-            <input
-              type="text"
-              placeholder="Search tutors..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-surface-container-high rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-5 py-3 bg-primary text-on-primary rounded-2xl font-semibold text-sm hover:opacity-90 transition-opacity"
-          >
-            <PlusCircle size={18} /> Add Tutor
-          </button>
+      {/* Search + Add */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-4">
+        <div className="relative flex-1 w-full max-w-sm">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant" size={18} />
+          <input
+            type="text"
+            placeholder="Search tutors..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+          />
         </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-primary text-on-primary rounded-2xl font-semibold text-sm hover:opacity-90 transition-opacity"
+        >
+          <PlusCircle size={18} /> Add Tutor
+        </button>
+      </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-outline-variant/20 text-left">
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Name</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Email</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Last Active</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={4} className="px-6 py-12 text-center text-on-surface-variant">No tutors found.</td></tr>
-              ) : (
-                filtered.map(tutor => (
-                  <tr key={tutor.id} className="border-b border-outline-variant/10 hover:bg-surface-container-high/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="font-semibold text-on-surface">{tutor.name}</span>
-                    </td>
-                    <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.email}</td>
-                    <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.lastActivity ?? '—'}</td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => deleteTutor(tutor.id)}
-                        className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+      {/* Mobile card list */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center gap-4 py-16 text-on-surface-variant">
+            <GraduationCap size={48} className="opacity-20" />
+            <p className="font-bold">No tutors found.</p>
+          </div>
+        ) : filtered.map(tutor => (
+          <div
+            key={tutor.id}
+            className="bg-surface-container-low border border-outline-variant/30 rounded-3xl p-5 flex items-center gap-4"
+          >
+            <div className="w-11 h-11 rounded-full bg-secondary/10 flex items-center justify-center text-secondary flex-shrink-0">
+              <GraduationCap size={20} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold text-on-surface truncate">{tutor.name}</p>
+              <p className="text-xs text-on-surface-variant truncate">{tutor.email}</p>
+              {tutor.lastActivity && (
+                <p className="text-[10px] text-on-surface-variant mt-1">{tutor.lastActivity}</p>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+            <button
+              onClick={() => deleteTutor(tutor.id)}
+              className="p-2 rounded-xl text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden md:block bg-surface-container-low rounded-[28px] border border-outline-variant/30 overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-outline-variant/20 text-left">
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Name</th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Email</th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Last Active</th>
+              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={4} className="px-6 py-12 text-center text-on-surface-variant">No tutors found.</td></tr>
+            ) : (
+              filtered.map(tutor => (
+                <tr key={tutor.id} className="border-b border-outline-variant/10 hover:bg-surface-container-high/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <span className="font-semibold text-on-surface">{tutor.name}</span>
+                  </td>
+                  <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.email}</td>
+                  <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.lastActivity ?? '—'}</td>
+                  <td className="px-6 py-4">
+                    <button
+                      onClick={() => deleteTutor(tutor.id)}
+                      className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       <AnimatePresence>
