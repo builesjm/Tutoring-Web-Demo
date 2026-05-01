@@ -41,6 +41,7 @@ export interface Resource {
   studentId?: string;
   title: string;
   type: 'pdf' | 'video' | 'zip';
+  url?: string;
   size?: string;
   duration?: string;
   itemsCount?: number;

@@ -56,6 +56,7 @@ import {
   FileIcon,
   Image,
   Film,
+  Plus,
 } from 'lucide-react';
 import { Course, Session, Feedback, Resource, Student, Tutor, Earning, ContentPost, ContentItem } from './types';
 import { DataProvider, useData } from './context/DataContext';
@@ -141,6 +142,7 @@ const Sidebar = ({ onLogout, role }: { onLogout: () => void, role: string }) => 
     { icon: BookOpen, label: 'Manage Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
     { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
+    { icon: FileText, label: 'Resources', path: '/resources' },
     { icon: BarChart3, label: 'Beta - Analytics', path: '/analytics' },
   ];
 
@@ -220,15 +222,14 @@ const MobileNav = ({ role }: { role: string }) => {
     { icon: LayoutDashboard, label: 'Home', path: '/' },
     { icon: BookOpen, label: 'Courses', path: '/courses' },
     { icon: GraduationCap, label: 'Resources', path: '/resources' },
-    { icon: User, label: 'Profile', path: '/profile' },
   ];
 
   const tutorNavItems = [
     { icon: LayoutDashboard, label: 'Home', path: '/' },
     { icon: BookOpen, label: 'Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
-    { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
-    { icon: BarChart3, label: 'Beta - Analytics', path: '/analytics' },
+    { icon: FileText, label: 'Resources', path: '/resources' },
+    { icon: BarChart3, label: 'Analytics', path: '/analytics' },
   ];
 
   const navItems = role === 'tutor' ? tutorNavItems : studentNavItems;
@@ -1886,10 +1887,11 @@ const Resources = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {videos.map((video) => (
-                <motion.div 
+                <motion.div
                   key={video.id}
                   whileHover={{ y: -5 }}
-                  className="bg-surface-container-low rounded-[32px] border border-outline-variant/30 overflow-hidden group cursor-pointer shadow-sm hover:shadow-xl transition-all"
+                  onClick={() => video.url && window.open(video.url, '_blank')}
+                  className={`bg-surface-container-low rounded-[32px] border border-outline-variant/30 overflow-hidden group shadow-sm hover:shadow-xl transition-all ${video.url ? 'cursor-pointer' : ''}`}
                 >
                   <div className="aspect-video relative overflow-hidden">
                     <img 
@@ -1927,10 +1929,11 @@ const Resources = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {documents.map((doc) => (
-                <motion.div 
+                <motion.div
                   key={doc.id}
                   whileHover={{ scale: 1.02 }}
-                  className="bg-surface-container-low p-6 rounded-[32px] border border-outline-variant/30 flex flex-col items-center text-center group cursor-pointer hover:border-primary/30 hover:shadow-lg transition-all"
+                  onClick={() => doc.url && window.open(doc.url, '_blank')}
+                  className={`bg-surface-container-low p-6 rounded-[32px] border border-outline-variant/30 flex flex-col items-center text-center group hover:border-primary/30 hover:shadow-lg transition-all ${doc.url ? 'cursor-pointer' : ''}`}
                 >
                   <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-4 transition-colors ${
                     doc.type === 'pdf' ? 'bg-red-50 text-red-600 group-hover:bg-red-100' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'
@@ -1957,6 +1960,143 @@ const Resources = () => {
           </div>
         )}
       </div>
+    </motion.div>
+  );
+};
+
+const TutorResources = () => {
+  const { resources, courses, addResource, deleteResource, currentUserEmail, tutors } = useData();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [form, setForm] = useState({ title: '', type: 'pdf' as 'pdf' | 'video' | 'zip', url: '', courseId: '' });
+  const [saving, setSaving] = useState(false);
+
+  const currentTutor = tutors.find(t => t.email === currentUserEmail);
+  const currentTutorName = currentTutor?.name ?? '';
+  const myCourses = courses.filter(c =>
+    (c.tutor || '').split(',').map(s => s.trim()).includes(currentTutorName)
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    await addResource({
+      title: form.title,
+      type: form.type,
+      url: form.url,
+      courseId: form.courseId || undefined,
+      icon: form.type === 'video' ? '🎥' : form.type === 'pdf' ? '📄' : '📦',
+    });
+    setSaving(false);
+    setIsModalOpen(false);
+    setForm({ title: '', type: 'pdf', url: '', courseId: '' });
+  };
+
+  const typeIcon = (type: string) => {
+    if (type === 'video') return <Video size={18} className="text-blue-500" />;
+    if (type === 'pdf') return <FileText size={18} className="text-red-500" />;
+    return <FileIcon size={18} className="text-green-500" />;
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="max-w-5xl mx-auto">
+      <Header title="Resources" />
+
+      <div className="flex items-center justify-between mb-8">
+        <p className="text-on-surface-variant text-sm">Share links and materials with your students.</p>
+        <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-5 py-3 bg-primary text-on-primary rounded-2xl font-bold text-sm hover:bg-primary/90 transition-colors">
+          <Plus size={16} /> Add Resource
+        </button>
+      </div>
+
+      {resources.length === 0 ? (
+        <div className="py-24 text-center">
+          <div className="w-20 h-20 bg-surface-container-high rounded-full flex items-center justify-center mx-auto mb-4 text-on-surface-variant">
+            <GraduationCap size={32} />
+          </div>
+          <h3 className="text-xl font-bold text-on-surface">No resources yet</h3>
+          <p className="text-on-surface-variant mt-1">Add a link to get started.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {resources.map(res => (
+            <div key={res.id} className="bg-surface-container-low border border-outline-variant/30 rounded-3xl p-5 flex items-center gap-4">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${res.type === 'video' ? 'bg-blue-50' : res.type === 'pdf' ? 'bg-red-50' : 'bg-green-50'}`}>
+                {typeIcon(res.type)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-on-surface truncate">{res.title}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">{res.type}</span>
+                  {res.courseId && <span className="text-xs text-on-surface-variant truncate">· {courses.find(c => c.id === res.courseId)?.title}</span>}
+                  {res.url && <span className="text-xs text-primary/70 truncate">· {res.url}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                {res.url && (
+                  <a href={res.url} target="_blank" rel="noopener noreferrer" className="p-2 rounded-xl hover:bg-surface-container-high transition-colors text-on-surface-variant" title="Open link">
+                    <ExternalLink size={16} />
+                  </a>
+                )}
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Delete "${res.title}"?`)) return;
+                    await deleteResource(res.id);
+                  }}
+                  className="p-2 rounded-xl hover:bg-red-50 transition-colors text-on-surface-variant hover:text-red-500"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <AnimatePresence>
+        {isModalOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4">
+            <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 40, opacity: 0 }} className="relative w-full max-w-md bg-surface-container-low rounded-[40px] border border-outline-variant/30 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="flex items-center justify-between p-6 sm:p-8 border-b border-outline-variant/20 flex-shrink-0">
+                <h2 className="text-xl font-black text-on-surface">Add Resource</h2>
+                <button onClick={() => setIsModalOpen(false)} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-container-high transition-colors"><X size={18} /></button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-6 sm:p-8 space-y-5 overflow-y-auto flex-1">
+                <div>
+                  <label className="block text-sm font-bold text-on-surface mb-2">Title</label>
+                  <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Algebra Cheat Sheet" className="w-full px-4 py-3 bg-surface-container-high border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-on-surface" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-on-surface mb-2">Type</label>
+                  <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as any }))} className="w-full px-4 py-3 bg-surface-container-high border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-on-surface">
+                    <option value="pdf">Document / PDF</option>
+                    <option value="video">Video</option>
+                    <option value="zip">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-on-surface mb-2">Link (URL)</label>
+                  <input required type="url" value={form.url} onChange={e => setForm(f => ({ ...f, url: e.target.value }))} placeholder="https://..." className="w-full px-4 py-3 bg-surface-container-high border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-on-surface" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-on-surface mb-2">Course (optional)</label>
+                  <select value={form.courseId} onChange={e => setForm(f => ({ ...f, courseId: e.target.value }))} className="w-full px-4 py-3 bg-surface-container-high border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-on-surface">
+                    <option value="">— No course —</option>
+                    {myCourses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                  </select>
+                </div>
+                <div className="pt-2 space-y-3">
+                  <button type="submit" disabled={saving} className="w-full py-3.5 bg-primary text-on-primary font-bold rounded-2xl hover:bg-primary/90 disabled:opacity-50 transition-colors">
+                    {saving ? 'Saving…' : 'Add Resource'}
+                  </button>
+                  <button type="button" onClick={() => setIsModalOpen(false)} className="w-full py-3 text-sm font-bold text-on-surface-variant hover:text-on-surface rounded-2xl transition-colors">
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };
@@ -3240,10 +3380,15 @@ const TutorStudents = () => {
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (inviteTab === 'link') {
-      const appUrl = `${window.location.origin}${window.location.pathname}`;
-      navigator.clipboard.writeText(appUrl);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2000);
+      setInviteLoading(true);
+      const token = await supabaseService.createInviteToken('student');
+      setInviteLoading(false);
+      if (token) {
+        const link = `${window.location.origin}${window.location.pathname}?invite=${token}`;
+        navigator.clipboard.writeText(link);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 3000);
+      }
       return;
     }
     if (inviteTab === 'sms') {
@@ -3374,8 +3519,9 @@ const TutorStudents = () => {
                 )}
 
                 {inviteTab === 'link' && (
-                  <div className="bg-surface-container-high rounded-2xl p-4 text-sm text-on-surface-variant">
-                    Copies the app link to your clipboard. Send it to your student however you prefer.
+                  <div className="bg-surface-container-high rounded-2xl p-4 space-y-1.5">
+                    <p className="text-sm font-semibold text-on-surface">Generate a secure invite link</p>
+                    <p className="text-xs text-on-surface-variant">The link expires in <strong>24 hours</strong> and can only be used <strong>once</strong>. Send it however you like — text, WhatsApp, email, etc.</p>
                   </div>
                 )}
 
@@ -3575,6 +3721,8 @@ const TutorsList = () => {
   const [newTutor, setNewTutor] = useState({ name: '', email: '' });
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [tutorLinkCopied, setTutorLinkCopied] = useState(false);
+  const [tutorLinkLoading, setTutorLinkLoading] = useState(false);
 
   const filtered = tutors.filter(t =>
     t.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -3730,12 +3878,144 @@ const TutorsList = () => {
                     {inviteLoading ? 'Sending Invite...' : 'Send Invite'}
                   </button>
                 </div>
+                <button type="button" disabled={tutorLinkLoading} onClick={async () => {
+                  setTutorLinkLoading(true);
+                  const token = await supabaseService.createInviteToken('tutor');
+                  setTutorLinkLoading(false);
+                  if (token) {
+                    const link = `${window.location.origin}${window.location.pathname}?invite=${token}`;
+                    navigator.clipboard.writeText(link);
+                    setTutorLinkCopied(true);
+                    setTimeout(() => setTutorLinkCopied(false), 3000);
+                  }
+                }} className="w-full py-3 rounded-2xl border border-outline-variant/30 text-on-surface-variant font-semibold text-sm hover:bg-surface-container-high transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
+                  {tutorLinkLoading ? <div className="w-4 h-4 border-2 border-outline-variant border-t-primary rounded-full animate-spin" /> : tutorLinkCopied ? <><Check size={14} /> Link Copied!</> : <><Link2 size={14} /> Copy 24h Invite Link</>}
+                </button>
               </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </motion.div>
+  );
+};
+
+const InviteSignup = ({ token, onDone }: { token: string; onDone: (role: string) => void }) => {
+  const [state, setState] = useState<'validating' | 'valid' | 'invalid'>('validating');
+  const [role, setRole] = useState('');
+  const [tokenError, setTokenError] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    supabaseService.validateInviteToken(token).then(result => {
+      if (result.valid) { setRole(result.role!); setState('valid'); }
+      else { setTokenError(result.error || 'Invalid invite link.'); setState('invalid'); }
+    });
+  }, [token]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
+    setIsLoading(true);
+    setError('');
+    try {
+      const role = await supabaseService.signUpWithToken(email, password, name, token);
+      setDone(true);
+      window.history.replaceState(null, '', window.location.pathname);
+      setTimeout(() => onDone(role), 1200);
+    } catch (err: any) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full min-h-screen flex items-center justify-center bg-surface p-4 relative overflow-hidden">
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-secondary/5 rounded-full blur-3xl pointer-events-none" />
+      <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md bg-surface-container-low border border-outline-variant/30 rounded-[40px] shadow-2xl p-8 sm:p-10 relative z-10">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-on-primary font-black text-lg">D</div>
+          <span className="font-black text-lg text-on-surface tracking-tight">DM - Tutoring</span>
+        </div>
+
+        {state === 'validating' && (
+          <div className="py-12 flex flex-col items-center gap-4 text-on-surface-variant">
+            <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <p className="text-sm font-medium">Checking your invite link…</p>
+          </div>
+        )}
+
+        {state === 'invalid' && (
+          <div className="py-8 text-center">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500"><X size={28} /></div>
+            <h2 className="text-xl font-black text-on-surface mb-2">Link Unavailable</h2>
+            <p className="text-sm text-on-surface-variant">{tokenError}</p>
+            <p className="text-xs text-on-surface-variant mt-4">Ask your tutor or admin to send a new invite link.</p>
+          </div>
+        )}
+
+        {state === 'valid' && !done && (
+          <>
+            <div className="mb-8">
+              <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-3 ${role === 'tutor' ? 'bg-secondary/10 text-secondary' : 'bg-primary/10 text-primary'}`}>
+                {role} invite
+              </span>
+              <h2 className="text-2xl font-black text-on-surface">Create your account</h2>
+              <p className="text-sm text-on-surface-variant mt-1">Your link expires in 24 hours and can only be used once.</p>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Full Name</label>
+                <input required value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
+                  className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Email Address</label>
+                <input required type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com"
+                  className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Password</label>
+                <div className="relative">
+                  <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+                    className="w-full px-5 py-4 pr-12 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+                  <button type="button" onClick={() => setShowPassword(p => !p)} className="absolute right-4 top-1/2 -translate-y-1/2 text-outline-variant">
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Confirm Password</label>
+                <input required type={showPassword ? 'text' : 'password'} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••"
+                  className="w-full px-5 py-4 bg-surface-container-lowest border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm" />
+              </div>
+              {error && <p className="text-sm text-red-500 bg-red-50 rounded-2xl px-4 py-3">{error}</p>}
+              <button type="submit" disabled={isLoading}
+                className="w-full py-4 bg-primary text-on-primary font-bold rounded-2xl shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-60 transition-all flex items-center justify-center gap-2 mt-2">
+                {isLoading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Create Account'}
+              </button>
+            </form>
+          </>
+        )}
+
+        {done && (
+          <div className="py-8 text-center">
+            <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 text-green-500"><CheckCircle2 size={28} /></div>
+            <h2 className="text-xl font-black text-on-surface mb-2">Account Created!</h2>
+            <p className="text-sm text-on-surface-variant">Logging you in…</p>
+          </div>
+        )}
+      </motion.div>
+    </div>
   );
 };
 
@@ -3982,10 +4262,10 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [isInvite, setIsInvite] = useState(() => {
-    // Implicit flow: hash contains type=invite
     const hash = window.location.hash;
     return hash.includes('type=invite') || hash.includes('type=recovery');
   });
+  const [inviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get('invite'));
   const { role: userRole, setRole: setUserRole, setCurrentUserEmail, refreshData } = useData();
 
   useEffect(() => {
@@ -4053,7 +4333,10 @@ export default function App() {
     setUserRole(null);
   };
 
-  // Show invite flow if URL has invite token
+  if (inviteToken && !isAuthenticated) {
+    return <InviteSignup token={inviteToken} onDone={handleLogin} />;
+  }
+
   if (isInvite) {
     return <AcceptInvite onDone={handleInviteDone} />;
   }
@@ -4087,6 +4370,7 @@ export default function App() {
                         <Route path="/students" element={<TutorStudents />} />
                         <Route path="/students/:id" element={<StudentDetail />} />
                         <Route path="/tutors" element={<TutorsList />} />
+                        <Route path="/resources" element={<TutorResources />} />
                         <Route path="/analytics" element={<TutorAnalytics />} />
                         <Route path="/profile" element={<Profile />} />
                       </>

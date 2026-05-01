@@ -335,4 +335,40 @@ export const supabaseService = {
     if (error) { console.error('Error deleting feedback for course:', error); return false; }
     return true;
   },
+
+  // Invite tokens
+  async createInviteToken(role: 'student' | 'tutor'): Promise<string | null> {
+    const token = crypto.randomUUID().replace(/-/g, '');
+    const expires_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase.from('invite_tokens').insert([{ token, role, expires_at, used: false }]);
+    if (error) { console.error('Error creating invite token:', error); return null; }
+    return token;
+  },
+
+  async validateInviteToken(token: string): Promise<{ valid: boolean; role?: string; error?: string }> {
+    const { data, error } = await supabase.from('invite_tokens').select('*').eq('token', token).single();
+    if (error || !data) return { valid: false, error: 'Invalid invite link.' };
+    if (data.used) return { valid: false, error: 'This invite link has already been used.' };
+    if (new Date(data.expires_at) < new Date()) return { valid: false, error: 'This invite link has expired.' };
+    return { valid: true, role: data.role };
+  },
+
+  async signUpWithToken(email: string, password: string, name: string, token: string): Promise<string> {
+    const validation = await this.validateInviteToken(token);
+    if (!validation.valid) throw new Error(validation.error || 'Invalid invite link.');
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) throw error;
+    if (data.user) {
+      const role = validation.role!;
+      await supabase.from('profiles').insert([{ id: data.user.id, role, name, email }]);
+      if (role === 'student') {
+        await supabase.from('students').insert([{ id: crypto.randomUUID(), name, email, enrolledCourseIds: [], lastActivity: 'Just now' }]);
+      } else {
+        await supabase.from('tutors').insert([{ id: crypto.randomUUID(), name, email, subjects: [], lastActivity: 'Just now' }]);
+      }
+      await supabase.from('invite_tokens').update({ used: true }).eq('token', token);
+      return role;
+    }
+    throw new Error('Signup failed.');
+  },
 };
