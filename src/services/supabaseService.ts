@@ -360,13 +360,19 @@ export const supabaseService = {
     if (error) throw error;
     if (data.user) {
       const role = validation.role!;
-      await supabase.from('profiles').insert([{ id: data.user.id, role, name, email }]);
+      // Use admin client for table inserts so they succeed even when email
+      // confirmation is enabled (no active session yet after signUp).
+      const client = supabaseAdmin ?? supabase;
+      const { error: profileError } = await client.from('profiles').insert([{ id: data.user.id, role, name, email }]);
+      if (profileError) console.error('Error inserting profile:', profileError);
       if (role === 'student') {
-        await supabase.from('students').insert([{ id: crypto.randomUUID(), name, email, enrolledCourseIds: [], lastActivity: 'Just now' }]);
+        const { error: studentError } = await client.from('students').insert([{ id: crypto.randomUUID(), name, email, enrolledCourseIds: [], lastActivity: 'Just now' }]);
+        if (studentError) console.error('Error inserting student:', studentError);
       } else {
-        await supabase.from('tutors').insert([{ id: crypto.randomUUID(), name, email, subjects: [], lastActivity: 'Just now' }]);
+        const { error: tutorError } = await client.from('tutors').insert([{ id: crypto.randomUUID(), name, email, subjects: [], lastActivity: 'Just now' }]);
+        if (tutorError) console.error('Error inserting tutor:', tutorError);
       }
-      await supabase.from('invite_tokens').update({ used: true }).eq('token', token);
+      await client.from('invite_tokens').update({ used: true }).eq('token', token);
       return role;
     }
     throw new Error('Signup failed.');
