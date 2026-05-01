@@ -228,8 +228,8 @@ const MobileNav = ({ role }: { role: string }) => {
     { icon: LayoutDashboard, label: 'Home', path: '/' },
     { icon: BookOpen, label: 'Courses', path: '/courses' },
     { icon: Users, label: 'Students', path: '/students' },
+    { icon: GraduationCap, label: 'Tutors', path: '/tutors' },
     { icon: FileText, label: 'Resources', path: '/resources' },
-    { icon: BarChart3, label: 'Analytics', path: '/analytics' },
   ];
 
   const navItems = role === 'tutor' ? tutorNavItems : studentNavItems;
