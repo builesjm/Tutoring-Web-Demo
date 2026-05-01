@@ -71,6 +71,7 @@ export interface Tutor {
   email: string;
   subjects?: string[];
   lastActivity?: string;
+  isAdmin?: boolean;
 }
 
 export interface Earning {

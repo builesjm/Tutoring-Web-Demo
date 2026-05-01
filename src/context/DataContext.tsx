@@ -16,6 +16,8 @@ interface DataContextType {
   setRole: (role: string | null) => void;
   currentUserEmail: string | null;
   setCurrentUserEmail: (email: string | null) => void;
+  currentUserName: string | null;
+  setCurrentUserName: (name: string | null) => void;
   refreshData: () => Promise<void>;
   addCourse: (course: Omit<Course, 'id'>) => Promise<void>;
   updateCourse: (id: string, updates: Partial<Course>) => Promise<void>;
@@ -32,6 +34,7 @@ interface DataContextType {
   deleteFeedback: (id: string) => Promise<void>;
   setAvailability: (availability: Availability[]) => void;
   addTutor: (tutor: Omit<Tutor, 'id'>) => Promise<void>;
+  updateTutor: (id: string, updates: Partial<Tutor>) => Promise<void>;
   deleteTutor: (id: string) => Promise<void>;
   earnings: Earning[];
   upsertEarning: (earning: Omit<Earning, 'id'>) => Promise<void>;
@@ -61,6 +64,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -220,6 +224,15 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateTutor = async (id: string, updates: Partial<Tutor>) => {
+    const result = await supabaseService.updateTutor(id, updates);
+    if (result) {
+      setTutors(prev => prev.map(t => t.id === id ? result : t));
+    } else {
+      setTutors(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+    }
+  };
+
   const deleteTutor = async (id: string) => {
     await supabaseService.deleteTutor(id);
     setTutors(prev => prev.filter(t => t.id !== id));
@@ -286,6 +299,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
       setRole,
       currentUserEmail,
       setCurrentUserEmail,
+      currentUserName,
+      setCurrentUserName,
       refreshData: fetchData,
       addCourse,
       updateCourse,
@@ -306,6 +321,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
         try { localStorage.setItem('tutor_availability', JSON.stringify(a)); } catch {}
       },
       addTutor,
+      updateTutor,
       deleteTutor,
       earnings,
       upsertEarning,

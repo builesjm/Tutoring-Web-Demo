@@ -189,6 +189,12 @@ export const supabaseService = {
     return tutorData as Tutor;
   },
 
+  async updateTutor(id: string, updates: Partial<Tutor>): Promise<Tutor | null> {
+    const { data, error } = await supabase.from('tutors').update(updates).eq('id', id).select().single();
+    if (error) { console.error('Error updating tutor:', error); return null; }
+    return data as Tutor;
+  },
+
   async deleteTutor(id: string): Promise<boolean> {
     const { error } = await supabase.from('tutors').delete().eq('id', id);
     if (error) { console.error('Error deleting tutor:', error); return false; }

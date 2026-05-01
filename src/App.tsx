@@ -57,6 +57,7 @@ import {
   Image,
   Film,
   Plus,
+  Crown,
 } from 'lucide-react';
 import { Course, Session, Feedback, Resource, Student, Tutor, Earning, ContentPost, ContentItem } from './types';
 import { DataProvider, useData } from './context/DataContext';
@@ -291,12 +292,7 @@ const MobileTopBar = ({ onLogout }: { onLogout: () => void }) => {
 };
 
 const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => {
-  const { currentUserEmail, role, tutors, students } = useData();
-  const currentUserName = React.useMemo(() => {
-    if (!currentUserEmail) return '';
-    if (role === 'tutor') return tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail)?.name ?? '';
-    return students.find((s: import('./types').Student) => s.email === currentUserEmail)?.name ?? '';
-  }, [currentUserEmail, role, tutors, students]);
+  const { currentUserName, role } = useData();
 
   return (
     <header className="flex items-center justify-between mb-8">
@@ -2193,11 +2189,11 @@ const Profile = () => {
 };
 
 const TutorDashboard = () => {
-  const { courses, students, tutors, currentUserEmail, contentPosts } = useData();
+  const { courses, students, tutors, currentUserEmail, currentUserName, contentPosts } = useData();
   const navigate = useNavigate();
 
   const currentTutor = tutors.find((t: import('./types').Tutor) => t.email === currentUserEmail);
-  const currentTutorName = currentTutor?.name ?? '';
+  const currentTutorName = currentUserName ?? currentTutor?.name ?? '';
 
   const myCourses = courses.filter(c =>
     (c.tutor || '').split(',').map(s => s.trim()).includes(currentTutorName)
@@ -2211,12 +2207,15 @@ const TutorDashboard = () => {
     cp.tutorEmail === currentUserEmail && cp.status === 'published'
   ).length;
 
+  const hasAnyAdmin = tutors.some(t => t.isAdmin);
+  const isEffectiveAdmin = currentTutor?.isAdmin || !hasAnyAdmin;
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const todayStr = format(new Date(), 'EEEE, MMMM d');
 
   const quickActions = [
-    { icon: Users, label: 'Add Student', description: 'Enroll or invite a new student', color: 'bg-blue-100 text-blue-600', path: '/students' },
+    ...(isEffectiveAdmin ? [{ icon: Users, label: 'Add Student', description: 'Enroll or invite a new student', color: 'bg-blue-100 text-blue-600', path: '/students' }] : []),
     { icon: FilePlus, label: 'Create Post', description: 'Pick a student → their course → post', color: 'bg-green-100 text-green-600', path: '/students' },
     { icon: BarChart3, label: 'View Analytics', description: 'Track earnings and progress', color: 'bg-purple-100 text-purple-600', path: '/analytics' },
   ];
@@ -3360,8 +3359,11 @@ const StudentDetail = () => {
 };
 
 const TutorStudents = () => {
-  const { students, courses, tutors, deleteStudent } = useData();
+  const { students, courses, tutors, deleteStudent, currentUserEmail } = useData();
   const navigate = useNavigate();
+  const currentTutor = tutors.find(t => t.email === currentUserEmail);
+  const hasAnyAdmin = tutors.some(t => t.isAdmin);
+  const isEffectiveAdmin = currentTutor?.isAdmin || !hasAnyAdmin;
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddStudent, setShowAddStudent] = useState(false);
   const [newStudent, setNewStudent] = useState({ name: '', email: '', phone: '' });
@@ -3434,12 +3436,14 @@ const TutorStudents = () => {
             className="w-full pl-12 pr-4 py-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
-        <button
-          onClick={() => setShowAddStudent(true)}
-          className="w-full md:w-auto px-6 py-4 bg-primary text-on-primary rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
-        >
-          <PlusCircle size={20} /> Add Student
-        </button>
+        {isEffectiveAdmin && (
+          <button
+            onClick={() => setShowAddStudent(true)}
+            className="w-full md:w-auto px-6 py-4 bg-primary text-on-primary rounded-2xl font-bold flex items-center justify-center gap-3 shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
+          >
+            <PlusCircle size={20} /> Add Student
+          </button>
+        )}
       </div>
 
       {/* Invite Modal */}
@@ -3567,7 +3571,14 @@ const TutorStudents = () => {
           </div>
         ) : filtered.map(student => {
           const enrolledCount = student.enrolledCourseIds.filter(id => courses.find(c => c.id === id)).length;
-          const assignedTutors = (student.assignedTutorIds ?? []).map(id => tutors.find(t => t.id === id)).filter(Boolean);
+          const assignedTutorNames = Array.from(new Set([
+            ...student.enrolledCourseIds.flatMap(cid => {
+              const course = courses.find(c => c.id === cid);
+              return course?.tutor ? course.tutor.split(',').map(s => s.trim()).filter(Boolean) : [];
+            }),
+            ...(student.assignedTutorIds ?? []).map(id => tutors.find(t => t.id === id)?.name).filter((n): n is string => !!n),
+          ]));
+          const assignedTutors = assignedTutorNames;
           return (
             <div
               key={student.id}
@@ -3585,7 +3596,7 @@ const TutorStudents = () => {
                     {enrolledCount} {enrolledCount === 1 ? 'course' : 'courses'}
                   </span>
                   {assignedTutors.length > 0
-                    ? <span className="text-[10px] text-on-surface-variant truncate">{assignedTutors.map(t => t!.name).join(', ')}</span>
+                    ? <span className="text-[10px] text-on-surface-variant truncate">{assignedTutors.join(', ')}</span>
                     : <span className="text-[10px] text-amber-500 font-semibold italic">No tutor</span>
                   }
                 </div>
@@ -3645,12 +3656,16 @@ const TutorStudents = () => {
                 <td className="px-8 py-6">
                   <div className="flex flex-wrap gap-1.5">
                     {(() => {
-                      const assigned = (student.assignedTutorIds ?? [])
-                        .map(id => tutors.find(t => t.id === id))
-                        .filter(Boolean);
-                      if (assigned.length === 0) return <span className="text-[10px] text-amber-500 font-semibold italic">None assigned</span>;
-                      return assigned.map(t => (
-                        <span key={t!.id} className="px-2.5 py-1 bg-secondary/10 text-secondary text-[10px] font-bold rounded-lg">{t!.name}</span>
+                      const names = Array.from(new Set([
+                        ...student.enrolledCourseIds.flatMap(cid => {
+                          const course = courses.find(c => c.id === cid);
+                          return course?.tutor ? course.tutor.split(',').map(s => s.trim()).filter(Boolean) : [];
+                        }),
+                        ...(student.assignedTutorIds ?? []).map(id => tutors.find(t => t.id === id)?.name).filter((n): n is string => !!n),
+                      ]));
+                      if (names.length === 0) return <span className="text-[10px] text-amber-500 font-semibold italic">None assigned</span>;
+                      return names.map(name => (
+                        <span key={name} className="px-2.5 py-1 bg-secondary/10 text-secondary text-[10px] font-bold rounded-lg">{name}</span>
                       ));
                     })()}
                   </div>
@@ -3715,7 +3730,7 @@ const TutorStudents = () => {
 };
 
 const TutorsList = () => {
-  const { tutors, deleteTutor, refreshData } = useData();
+  const { tutors, deleteTutor, updateTutor, refreshData, currentUserEmail } = useData();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [newTutor, setNewTutor] = useState({ name: '', email: '' });
@@ -3723,6 +3738,11 @@ const TutorsList = () => {
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [tutorLinkCopied, setTutorLinkCopied] = useState(false);
   const [tutorLinkLoading, setTutorLinkLoading] = useState(false);
+
+  const currentTutor = tutors.find(t => t.email === currentUserEmail);
+  const hasAnyAdmin = tutors.some(t => t.isAdmin);
+  // Bootstrap: if no admin exists yet, all tutors get admin controls so someone can claim it
+  const isEffectiveAdmin = currentTutor?.isAdmin || !hasAnyAdmin;
 
   const filtered = tutors.filter(t =>
     t.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -3763,12 +3783,14 @@ const TutorsList = () => {
             className="w-full pl-11 pr-4 py-3 bg-surface-container-low border border-outline-variant/30 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-primary text-on-primary rounded-2xl font-semibold text-sm hover:opacity-90 transition-opacity"
-        >
-          <PlusCircle size={18} /> Add Tutor
-        </button>
+        {isEffectiveAdmin && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-3 bg-primary text-on-primary rounded-2xl font-semibold text-sm hover:opacity-90 transition-opacity"
+          >
+            <PlusCircle size={18} /> Add Tutor
+          </button>
+        )}
       </div>
 
       {/* Mobile card list */}
@@ -3787,18 +3809,36 @@ const TutorsList = () => {
               <GraduationCap size={20} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-bold text-on-surface truncate">{tutor.name}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="font-bold text-on-surface truncate">{tutor.name}</p>
+                {tutor.isAdmin && <Crown size={12} className="text-amber-500 flex-shrink-0" style={{ fill: 'currentColor' }} />}
+              </div>
               <p className="text-xs text-on-surface-variant truncate">{tutor.email}</p>
               {tutor.lastActivity && (
                 <p className="text-[10px] text-on-surface-variant mt-1">{tutor.lastActivity}</p>
               )}
             </div>
-            <button
-              onClick={() => { if (confirm(`Delete ${tutor.name}?`)) deleteTutor(tutor.id); }}
-              className="p-2 rounded-xl text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-            >
-              <Trash2 size={16} />
-            </button>
+            {isEffectiveAdmin && (
+              <button
+                title={tutor.isAdmin ? 'Remove admin' : 'Make admin'}
+                onClick={() => updateTutor(tutor.id, { isAdmin: !tutor.isAdmin })}
+                className="p-2 rounded-xl transition-colors flex-shrink-0 hover:bg-amber-50"
+              >
+                <Crown
+                  size={16}
+                  className={tutor.isAdmin ? 'text-amber-500' : 'text-on-surface-variant/30'}
+                  style={{ fill: tutor.isAdmin ? 'currentColor' : 'none' }}
+                />
+              </button>
+            )}
+            {isEffectiveAdmin && (
+              <button
+                onClick={() => { if (confirm(`Delete ${tutor.name}?`)) deleteTutor(tutor.id); }}
+                className="p-2 rounded-xl text-on-surface-variant hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -3811,28 +3851,44 @@ const TutorsList = () => {
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Name</th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Email</th>
               <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Last Active</th>
-              <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>
+              {isEffectiveAdmin && <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-on-surface-variant">Actions</th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={4} className="px-6 py-12 text-center text-on-surface-variant">No tutors found.</td></tr>
+              <tr><td colSpan={isEffectiveAdmin ? 4 : 3} className="px-6 py-12 text-center text-on-surface-variant">No tutors found.</td></tr>
             ) : (
               filtered.map(tutor => (
                 <tr key={tutor.id} className="border-b border-outline-variant/10 hover:bg-surface-container-high/50 transition-colors">
                   <td className="px-6 py-4">
-                    <span className="font-semibold text-on-surface">{tutor.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-on-surface">{tutor.name}</span>
+                      {tutor.isAdmin && <Crown size={13} className="text-amber-500" style={{ fill: 'currentColor' }} />}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.email}</td>
                   <td className="px-6 py-4 text-on-surface-variant text-sm">{tutor.lastActivity ?? '—'}</td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => { if (confirm(`Delete ${tutor.name}?`)) deleteTutor(tutor.id); }}
-                      className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
+                  {isEffectiveAdmin && (
+                    <td className="px-6 py-4 flex items-center gap-1">
+                      <button
+                        title={tutor.isAdmin ? 'Remove admin' : 'Make admin'}
+                        onClick={() => updateTutor(tutor.id, { isAdmin: !tutor.isAdmin })}
+                        className="p-2 rounded-xl transition-colors hover:bg-amber-50"
+                      >
+                        <Crown
+                          size={16}
+                          className={tutor.isAdmin ? 'text-amber-500' : 'text-on-surface-variant/30'}
+                          style={{ fill: tutor.isAdmin ? 'currentColor' : 'none' }}
+                        />
+                      </button>
+                      <button
+                        onClick={() => { if (confirm(`Delete ${tutor.name}?`)) deleteTutor(tutor.id); }}
+                        className="p-2 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -4266,7 +4322,7 @@ export default function App() {
     return hash.includes('type=invite') || hash.includes('type=recovery');
   });
   const [inviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get('invite'));
-  const { role: userRole, setRole: setUserRole, setCurrentUserEmail, refreshData } = useData();
+  const { role: userRole, setRole: setUserRole, setCurrentUserEmail, setCurrentUserName, refreshData } = useData();
 
   useEffect(() => {
     // PKCE invite flow: Supabase redirects with ?code= in the URL.
@@ -4299,6 +4355,7 @@ export default function App() {
           setIsAuthenticated(true);
           setUserRole(profile.role);
           setCurrentUserEmail(session.user.email ?? null);
+          setCurrentUserName(profile.name ?? null);
         }
       }
       setAuthLoading(false);
@@ -4312,6 +4369,10 @@ export default function App() {
     setUserRole(role);
     const session = await supabaseService.getSession();
     setCurrentUserEmail(session?.user.email ?? null);
+    if (session?.user) {
+      const profile = await supabaseService.getProfile(session.user.id);
+      setCurrentUserName(profile?.name ?? null);
+    }
     await refreshData();
   };
 
@@ -4323,14 +4384,17 @@ export default function App() {
       const profile = await supabaseService.getProfile(session.user.id);
       setUserRole(profile?.role ?? 'student');
       setCurrentUserEmail(session.user.email ?? null);
+      setCurrentUserName(profile?.name ?? null);
     }
     setIsAuthenticated(true);
+    await refreshData();
   };
 
   const handleLogout = async () => {
     await supabaseService.signOut();
     setIsAuthenticated(false);
     setUserRole(null);
+    setCurrentUserName(null);
   };
 
   if (inviteToken && !isAuthenticated) {
